@@ -319,28 +319,36 @@ def cart(request):
 
     shipping = Decimal('60.00') if cart_items.exists() else Decimal('0.00')
 
-    # Read the applied coupon from the session.
+    # Read applied coupon from session, but strictly validate that it is not expired
     coupon_id = request.session.get('coupon_id')
     coupon = None
     discount = Decimal('0.00')
 
     if coupon_id and cart_items.exists():
-        coupon = Coupons.objects.filter(
-            id=coupon_id,
-            active=True
-        ).first()
-
-        if coupon:
+        coupon = Coupons.objects.filter(id=coupon_id).first()
+        if coupon and coupon.is_valid():
             discount = (subtotal * coupon.discount / Decimal('100')).quantize(
                 Decimal('0.01')
             )
         else:
+            # Auto-remove expired or invalid old coupons from session
             request.session.pop('coupon_id', None)
+            coupon = None
+            discount = Decimal('0.00')
+    elif coupon_id and not cart_items.exists():
+        # Cart is empty, clean coupon
+        request.session.pop('coupon_id', None)
+        coupon = None
+        discount = Decimal('0.00')
 
-    # Never allow the discount to exceed the subtotal.
+    # Never allow discount to exceed subtotal
     discount = min(discount, subtotal)
-
     grand_total = subtotal + shipping - discount
+
+    # Retrieve all coupons and evaluate validity
+    all_coupons = Coupons.objects.all().order_by('-id')
+    active_coupons = [c for c in all_coupons if c.is_valid()]
+    expired_coupons = [c for c in all_coupons if not c.is_valid()]
 
     context = {
         'categories': categories,
@@ -350,6 +358,8 @@ def cart(request):
         'coupon': coupon,
         'discount': discount,
         'grand_total': grand_total,
+        'active_coupons': active_coupons,
+        'expired_coupons': expired_coupons,
     }
 
     return render(request, 'cart.html', context)
@@ -358,35 +368,50 @@ def apply_coupon(request):
     if request.method != 'POST':
         return redirect('cart')
 
-    code = request.POST.get('coupon_code', '').strip().upper()
+    coupon_code = request.POST.get('coupon_code', '').strip()
 
-    if not code:
-        messages.error(request, 'Please enter a coupon code.')
+    if not coupon_code:
+        messages.error(request, "Please enter a coupon code.")
         return redirect('cart')
 
-    # Don't apply coupons to an empty cart.
+    # Check whether the cart contains items
     if not CartItem.objects.exists():
-        messages.error(request, 'Your cart is empty.')
+        messages.error(request, "Your cart is empty.")
         return redirect('cart')
 
+    # Find the coupon (case-insensitive)
     coupon = Coupons.objects.filter(
-        code__iexact=code,
-        active=True
+        code__iexact=coupon_code
     ).first()
 
+    # Check whether the coupon exists
     if not coupon:
-        messages.error(request, 'Invalid or inactive coupon code.')
+        messages.error(request, "Invalid coupon code.")
         return redirect('cart')
 
-    # A percentage discount must be greater than 0 and no more than 100.
-    if coupon.discount <= 0 or coupon.discount > 100:
-        messages.error(request, 'This coupon has an invalid discount.')
+    # Check whether coupon is valid and active
+    if not coupon.is_valid():
+        if coupon.is_expired():
+            messages.error(request, "This coupon has expired.")
+        elif not coupon.active:
+            messages.error(request, "This coupon is inactive.")
+        elif coupon.start_date > timezone.now():
+            messages.error(request, "This coupon is not available yet.")
+        else:
+            messages.error(request, "This coupon has an invalid discount or configuration.")
         return redirect('cart')
 
+    # Apply the valid coupon
     request.session['coupon_id'] = coupon.id
 
-    messages.success(request,f'Coupon {coupon.code} applied successfully! 'f'You received a {coupon.discount}% discount.')
+    messages.success(
+        request,
+        f"Coupon {coupon.code} applied successfully! "
+        f"You received {coupon.discount}% discount."
+    )
+
     return redirect('cart')
+
 
 def remove_coupon(request):
     if request.method == 'POST':
@@ -481,24 +506,76 @@ def checkout(request):
     discount = Decimal('0.00')
 
     if coupon_id and cart_items.exists():
-        coupon = Coupons.objects.filter(
-            id=coupon_id,
-            active=True
-        ).first()
-
-        if coupon and Decimal('0') < coupon.discount <= Decimal('100'):
-            discount = (
-                subtotal * coupon.discount / Decimal('100')
-            ).quantize(Decimal('0.01'))
+        coupon = Coupons.objects.filter(id=coupon_id).first()
+        if coupon and coupon.is_valid():
+            discount = (subtotal * coupon.discount / Decimal('100')).quantize(Decimal('0.01'))
         else:
             request.session.pop('coupon_id', None)
             coupon = None
 
     # Prevent the discount from exceeding the subtotal.
     discount = min(discount, subtotal)
-
-    # Calculate the final amount.
     total = subtotal + shipping - discount
+
+    # Fetch latest saved billing address for authenticated user
+    saved_billing = None
+    if request.user.is_authenticated:
+        saved_billing = BillingAddress.objects.filter(user=request.user).first()
+
+    if request.method == 'POST':
+        if not cart_items.exists():
+            messages.error(request, 'Your cart is empty. Please add items before checking out.')
+            return redirect('shop')
+
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        mobile_no = request.POST.get('mobile_no', '').strip()
+        address_line1 = request.POST.get('address_line1', '').strip()
+        address_line2 = request.POST.get('address_line2', '').strip()
+        country = request.POST.get('country', '').strip() or 'United States'
+        city = request.POST.get('city', '').strip()
+        state = request.POST.get('state', '').strip()
+        zip_code = request.POST.get('zip_code', '').strip()
+        payment_method = request.POST.get('payment', 'Direct Check')
+
+        if not all([first_name, last_name, email, mobile_no, address_line1, city, state, zip_code]):
+            messages.error(request, 'Please fill in all required billing address fields.')
+        else:
+            billing = BillingAddress.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                mobile_no=mobile_no,
+                address_line1=address_line1,
+                address_line2=address_line2,
+                country=country,
+                city=city,
+                state=state,
+                zip_code=zip_code,
+            )
+
+            order = Order.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                billing_address=billing,
+                subtotal=subtotal,
+                shipping=shipping,
+                discount=discount,
+                total_amount=total,
+                payment_method=payment_method,
+                order_status='Processing',
+            )
+
+            # Clear cart items and coupon
+            cart_items.delete()
+            request.session.pop('coupon_id', None)
+
+            messages.success(
+                request,
+                f"Thank you {first_name}! Order #{order.id} placed successfully and billing address saved."
+            )
+            return redirect('index')
 
     context = {
         'categories': categories,
@@ -508,6 +585,7 @@ def checkout(request):
         'coupon': coupon,
         'discount': discount,
         'total': total,
+        'saved_billing': saved_billing,
     }
 
     return render(request, 'checkout.html', context)
@@ -597,6 +675,8 @@ def shop(request):
     page_number = request.GET.get('page')
     products = paginator.get_page(page_number)
 
+    shop_carousel_items = ShopCarousel.objects.filter(is_active=True)
+
     context = {
         'categories': categories,
         'colors': colors,
@@ -605,6 +685,7 @@ def shop(request):
         'selected_category': category_id,
         'selected_subcategory': subcategory_id,
         'search_query': search_query or '',
+        'shop_carousel_items': shop_carousel_items,
     }
 
     return render(request, 'shop.html', context)
@@ -619,3 +700,94 @@ def filter(products, color=None, size=None, min_price=None, max_price=None):
     if max_price:
         products=products.filter(price__lte=max_price)
     return products
+
+
+@login_required(login_url='login')
+def manage_account(request):
+    categories = Categories.objects.all()
+    user = request.user
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'update_profile':
+            first_name = request.POST.get('first_name', '').strip()
+            last_name = request.POST.get('last_name', '').strip()
+            email = request.POST.get('email', '').strip()
+
+            if not email:
+                messages.error(request, 'Email address cannot be empty.')
+            else:
+                existing = User.objects.filter(email__iexact=email).exclude(id=user.id).first()
+                if existing:
+                    messages.error(request, 'This email address is already used by another account.')
+                else:
+                    user.first_name = first_name
+                    user.last_name = last_name
+                    user.email = email
+                    user.save()
+                    messages.success(request, 'Your profile details have been updated successfully!')
+            return redirect('manage_account')
+
+        elif action == 'change_password':
+            current_password = request.POST.get('current_password', '')
+            new_password = request.POST.get('new_password', '')
+            confirm_password = request.POST.get('confirm_password', '')
+
+            if not user.check_password(current_password):
+                messages.error(request, 'The current password you entered is incorrect.')
+            elif len(new_password) < 6:
+                messages.error(request, 'New password must be at least 6 characters long.')
+            elif new_password != confirm_password:
+                messages.error(request, 'The new password and confirm password do not match.')
+            else:
+                user.set_password(new_password)
+                user.save()
+                auth_login(request, user)
+                messages.success(request, 'Password changed successfully!')
+            return redirect('manage_account')
+
+        elif action == 'save_billing':
+            first_name = request.POST.get('first_name', '').strip()
+            last_name = request.POST.get('last_name', '').strip()
+            email = request.POST.get('email', '').strip()
+            mobile_no = request.POST.get('mobile_no', '').strip()
+            address_line1 = request.POST.get('address_line1', '').strip()
+            address_line2 = request.POST.get('address_line2', '').strip()
+            country = request.POST.get('country', '').strip() or 'United States'
+            city = request.POST.get('city', '').strip()
+            state = request.POST.get('state', '').strip()
+            zip_code = request.POST.get('zip_code', '').strip()
+
+            BillingAddress.objects.update_or_create(
+                user=user,
+                defaults={
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'email': email,
+                    'mobile_no': mobile_no,
+                    'address_line1': address_line1,
+                    'address_line2': address_line2,
+                    'country': country,
+                    'city': city,
+                    'state': state,
+                    'zip_code': zip_code,
+                }
+            )
+            messages.success(request, 'Billing address details saved in database!')
+            return redirect('manage_account')
+
+    saved_billing = BillingAddress.objects.filter(user=user).first()
+
+    context = {
+        'categories': categories,
+        'user': user,
+        'saved_billing': saved_billing,
+    }
+    return render(request, 'manage_account.html', context)
+
+
+def user_logout(request):
+    logout(request)
+    messages.success(request, 'You have been logged out successfully.')
+    return redirect('login')

@@ -24,7 +24,7 @@
     <link href="{% static 'lib/owlcarousel/assets/owl.carousel.min.css' %}" rel="stylesheet">
 
     <!-- Customized Bootstrap Stylesheet -->
-    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
 </head>
 
 <body>
@@ -151,8 +151,29 @@
                             <a href="{% url 'contact' %}" class="nav-item nav-link">Contact</a>
                         </div>
                         <div class="navbar-nav ml-auto py-0">
-                            <a href="" class="nav-item nav-link">Login</a>
-                            <a href="" class="nav-item nav-link">Register</a>
+                            {% if request.user.is_authenticated %}
+                            <div class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-toggle="dropdown">
+                                    <i class="fa fa-user-circle fa-lg mr-2 text-primary"></i>
+                                    <span class="font-weight-semi-bold">{{ request.user.first_name|default:request.user.username }}</span>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-right rounded-0 m-0 shadow">
+                                    <a href="{% url 'manage_account' %}" class="dropdown-item py-2">
+                                        <i class="fa fa-user-cog mr-2 text-primary"></i>Manage Account
+                                    </a>
+                                    <a href="{% url 'cart' %}" class="dropdown-item py-2">
+                                        <i class="fa fa-shopping-bag mr-2 text-primary"></i>My Cart
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    <a href="{% url 'logout' %}" class="dropdown-item py-2 text-danger">
+                                        <i class="fa fa-sign-out-alt mr-2"></i>Logout
+                                    </a>
+                                </div>
+                            </div>
+                            {% else %}
+                            <a href="{% url 'login' %}" class="nav-item nav-link">Login</a>
+                            <a href="{% url 'register' %}" class="nav-item nav-link">Register</a>
+                            {% endif %}
                         </div>
                     </div>
                 </nav>
@@ -178,200 +199,164 @@
 
     <!-- Checkout Start -->
     <div class="container-fluid pt-5">
-        <div class="row px-xl-5">
-            <div class="col-lg-8">
-                <div class="mb-4">
-                    <h4 class="font-weight-semi-bold mb-4">Billing Address</h4>
-                    <div class="row">
-                        <div class="col-md-6 form-group">
-                            <label>First Name</label>
-                            <input class="form-control" type="text" placeholder="John">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>Last Name</label>
-                            <input class="form-control" type="text" placeholder="Doe">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>E-mail</label>
-                            <input class="form-control" type="text" placeholder="example@email.com">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>Mobile No</label>
-                            <input class="form-control" type="text" placeholder="+123 456 789">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>Address Line 1</label>
-                            <input class="form-control" type="text" placeholder="123 Street">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>Address Line 2</label>
-                            <input class="form-control" type="text" placeholder="123 Street">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>Country</label>
-                            <select class="custom-select">
-                                <option selected>United States</option>
-                                <option>Afghanistan</option>
-                                <option>Albania</option>
-                                <option>Algeria</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>City</label>
-                            <input class="form-control" type="text" placeholder="New York">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>State</label>
-                            <input class="form-control" type="text" placeholder="New York">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>ZIP Code</label>
-                            <input class="form-control" type="text" placeholder="123">
-                        </div>
-                        <div class="col-md-12 form-group">
-                            <div class="custom-control custom-checkbox">
-                                <input type="checkbox" class="custom-control-input" id="newaccount">
-                                <label class="custom-control-label" for="newaccount">Create an account</label>
+        {% if messages %}
+            <div class="px-xl-5">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <form method="POST" action="{% url 'checkout' %}">
+            {% csrf_token %}
+            <div class="row px-xl-5">
+                <div class="col-lg-8">
+                    <div class="mb-4">
+                        <h4 class="font-weight-semi-bold mb-4">
+                            <i class="fa fa-map-marker-alt text-primary mr-2"></i>Billing Address
+                        </h4>
+                        {% if saved_billing %}
+                            <div class="alert alert-info py-2 px-3 small mb-3">
+                                <i class="fa fa-info-circle mr-1"></i>Pre-filled with your saved billing address from database. You can edit it below if needed.
                             </div>
-                        </div>
-                        <div class="col-md-12 form-group">
-                            <div class="custom-control custom-checkbox">
-                                <input type="checkbox" class="custom-control-input" id="shipto">
-                                <label class="custom-control-label" for="shipto" data-toggle="collapse"
-                                    data-target="#shipping-address">Ship to different address</label>
+                        {% endif %}
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label>First Name *</label>
+                                <input class="form-control" type="text" name="first_name" placeholder="John" value="{{ saved_billing.first_name|default:request.user.first_name }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Last Name *</label>
+                                <input class="form-control" type="text" name="last_name" placeholder="Doe" value="{{ saved_billing.last_name|default:request.user.last_name }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>E-mail *</label>
+                                <input class="form-control" type="email" name="email" placeholder="example@email.com" value="{{ saved_billing.email|default:request.user.email }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Mobile No *</label>
+                                <input class="form-control" type="text" name="mobile_no" placeholder="+123 456 789" value="{{ saved_billing.mobile_no|default:'' }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Address Line 1 *</label>
+                                <input class="form-control" type="text" name="address_line1" placeholder="123 Street" value="{{ saved_billing.address_line1|default:'' }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Address Line 2 (Optional)</label>
+                                <input class="form-control" type="text" name="address_line2" placeholder="Suite, Apt, etc." value="{{ saved_billing.address_line2|default:'' }}">
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>Country *</label>
+                                <select class="custom-select" name="country">
+                                    <option value="{{ saved_billing.country|default:'United States' }}" selected>{{ saved_billing.country|default:'United States' }}</option>
+                                    <option value="United States">United States</option>
+                                    <option value="India">India</option>
+                                    <option value="United Kingdom">United Kingdom</option>
+                                    <option value="Canada">Canada</option>
+                                    <option value="Australia">Australia</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>City *</label>
+                                <input class="form-control" type="text" name="city" placeholder="New York" value="{{ saved_billing.city|default:'' }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>State *</label>
+                                <input class="form-control" type="text" name="state" placeholder="New York" value="{{ saved_billing.state|default:'' }}" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label>ZIP Code *</label>
+                                <input class="form-control" type="text" name="zip_code" placeholder="12345" value="{{ saved_billing.zip_code|default:'' }}" required>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="collapse mb-4" id="shipping-address">
-                    <h4 class="font-weight-semi-bold mb-4">Shipping Address</h4>
-                    <div class="row">
-                        <div class="col-md-6 form-group">
-                            <label>First Name</label>
-                            <input class="form-control" type="text" placeholder="John">
+                <div class="col-lg-4">
+                    <div class="card border-secondary mb-5">
+                        <div class="card-header bg-secondary border-0">
+                            <h4 class="font-weight-semi-bold m-0">Order Total</h4>
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label>Last Name</label>
-                            <input class="form-control" type="text" placeholder="Doe">
+
+                        <div class="card-body">
+                            <h5 class="font-weight-medium mb-3">Products</h5>
+
+                            {% for item in cart_items %}
+                            <div class="d-flex justify-content-between">
+                                <p>{{ item.product.name }} × {{ item.quantity }}</p>
+                                <p>₹{{ item.total_price }}</p>
+                            </div>
+                            {% empty %}
+                            <p class="text-muted">Your cart is empty.</p>
+                            {% endfor %}
+
+                            <hr class="mt-0">
+
+                            <div class="d-flex justify-content-between mb-3 pt-1">
+                                <h6 class="font-weight-medium">Subtotal</h6>
+                                <h6 class="font-weight-medium">₹{{ subtotal }}</h6>
+                            </div>
+
+                            <div class="d-flex justify-content-between">
+                                <h6 class="font-weight-medium">Shipping</h6>
+                                <h6 class="font-weight-medium">₹{{ shipping }}</h6>
+                            </div>
+                            {% if coupon %}
+                            <div class="d-flex justify-content-between mt-2">
+                                <h6 class="font-weight-medium text-success">
+                                    Coupon ({{ coupon.code }} - {{ coupon.discount }}%)
+                                </h6>
+                                <h6 class="font-weight-medium text-success">
+                                    -₹{{ discount }}
+                                </h6>
+                            </div>
+                            {% endif %}
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label>E-mail</label>
-                            <input class="form-control" type="text" placeholder="example@email.com">
+
+                        <div class="card-footer border-secondary bg-transparent">
+                            <div class="d-flex justify-content-between mt-2">
+                                <h5 class="font-weight-bold">Total</h5>
+                                <h5 class="font-weight-bold text-primary">₹{{ total }}</h5>
+                            </div>
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label>Mobile No</label>
-                            <input class="form-control" type="text" placeholder="+123 456 789">
+                    </div>
+                    <div class="card border-secondary mb-5">
+                        <div class="card-header bg-secondary border-0">
+                            <h4 class="font-weight-semi-bold m-0">Payment</h4>
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label>Address Line 1</label>
-                            <input class="form-control" type="text" placeholder="123 Street">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio" class="custom-control-input" name="payment" id="paypal" value="Paypal">
+                                    <label class="custom-control-label" for="paypal">Paypal</label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio" class="custom-control-input" name="payment" id="directcheck" value="Direct Check" checked>
+                                    <label class="custom-control-label" for="directcheck">Direct Check / Cash On Delivery</label>
+                                </div>
+                            </div>
+                            <div class="form-group mb-0">
+                                <div class="custom-control custom-radio">
+                                    <input type="radio" class="custom-control-input" name="payment" id="banktransfer" value="Bank Transfer">
+                                    <label class="custom-control-label" for="banktransfer">Bank Transfer / UPI</label>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label>Address Line 2</label>
-                            <input class="form-control" type="text" placeholder="123 Street">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>Country</label>
-                            <select class="custom-select">
-                                <option selected>United States</option>
-                                <option>Afghanistan</option>
-                                <option>Albania</option>
-                                <option>Algeria</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>City</label>
-                            <input class="form-control" type="text" placeholder="New York">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>State</label>
-                            <input class="form-control" type="text" placeholder="New York">
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label>ZIP Code</label>
-                            <input class="form-control" type="text" placeholder="123">
+                        <div class="card-footer border-secondary bg-transparent">
+                            <button type="submit" class="btn btn-lg btn-block btn-primary font-weight-bold my-3 py-3">
+                                Place Order <i class="fa fa-arrow-right ml-1"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4">
-                <div class="card border-secondary mb-5">
-    <div class="card-header bg-secondary border-0">
-        <h4 class="font-weight-semi-bold m-0">Order Total</h4>
-    </div>
-
-    <div class="card-body">
-        <h5 class="font-weight-medium mb-3">Products</h5>
-
-        {% for item in cart_items %}
-        <div class="d-flex justify-content-between">
-            <p>{{ item.product.name }} × {{ item.quantity }}</p>
-            <p>₹{{ item.total_price }}</p>
-        </div>
-        {% empty %}
-        <p>Your cart is empty.</p>
-        {% endfor %}
-
-        <hr class="mt-0">
-
-        <div class="d-flex justify-content-between mb-3 pt-1">
-            <h6 class="font-weight-medium">Subtotal</h6>
-            <h6 class="font-weight-medium">₹{{ subtotal }}</h6>
-        </div>
-
-        <div class="d-flex justify-content-between">
-            <h6 class="font-weight-medium">Shipping</h6>
-            <h6 class="font-weight-medium">₹{{ shipping }}</h6>
-        </div>
-{% if coupon %}
-<div class="d-flex justify-content-between mt-2">
-    <h6 class="font-weight-medium">
-        Coupon ({{ coupon.code }} - {{ coupon.discount }}%)
-    </h6>
-    <h6 class="font-weight-medium text-success">
-        -₹{{ discount }}
-    </h6>
-</div>
-{% endif %}
-    </div>
-
-    <div class="card-footer border-secondary bg-transparent">
-        <div class="d-flex justify-content-between mt-2">
-            <h5 class="font-weight-bold">Total</h5>
-            <h5 class="font-weight-bold">₹{{ total }}</h5>
-        </div>
-    </div>
-</div>
-                <div class="card border-secondary mb-5">
-                    <div class="card-header bg-secondary border-0">
-                        <h4 class="font-weight-semi-bold m-0">Payment</h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <div class="custom-control custom-radio">
-                                <input type="radio" class="custom-control-input" name="payment" id="paypal">
-                                <label class="custom-control-label" for="paypal">Paypal</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <div class="custom-control custom-radio">
-                                <input type="radio" class="custom-control-input" name="payment" id="directcheck">
-                                <label class="custom-control-label" for="directcheck">Direct Check</label>
-                            </div>
-                        </div>
-                        <div class="">
-                            <div class="custom-control custom-radio">
-                                <input type="radio" class="custom-control-input" name="payment" id="banktransfer">
-                                <label class="custom-control-label" for="banktransfer">Bank Transfer</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-footer border-secondary bg-transparent">
-                        <button class="btn btn-lg btn-block btn-primary font-weight-bold my-3 py-3">Place Order</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </form>
     </div>
     <!-- Checkout End -->
 

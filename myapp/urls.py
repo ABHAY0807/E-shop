@@ -23,6 +23,8 @@ urlpatterns = [
     path('update-cart/<int:id>/', views.update_cart, name='update_cart'),
     path('apply-coupon/', views.apply_coupon, name='apply_coupon'),
     path('remove-coupon/', views.remove_coupon, name='remove_coupon'),
+    path('manage-account/', views.manage_account, name='manage_account'),
+    path('logout/', views.user_logout, name='logout'),
     
 ]
 

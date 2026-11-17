@@ -24,7 +24,7 @@
     <link href="{% static 'lib/owlcarousel/assets/owl.carousel.min.css' %}" rel="stylesheet">
 
     <!-- Customized Bootstrap Stylesheet -->
-    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
 </head>
 
 <body>
@@ -152,8 +152,29 @@
                             <a href="{% url 'contact' %}" class="nav-item nav-link">Contact</a>
                         </div>
                         <div class="navbar-nav ml-auto py-0">
-                            <a href="" class="nav-item nav-link">Login</a>
-                            <a href="" class="nav-item nav-link">Register</a>
+                            {% if request.user.is_authenticated %}
+                            <div class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-toggle="dropdown">
+                                    <i class="fa fa-user-circle fa-lg mr-2 text-primary"></i>
+                                    <span class="font-weight-semi-bold">{{ request.user.first_name|default:request.user.username }}</span>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-right rounded-0 m-0 shadow">
+                                    <a href="{% url 'manage_account' %}" class="dropdown-item py-2">
+                                        <i class="fa fa-user-cog mr-2 text-primary"></i>Manage Account
+                                    </a>
+                                    <a href="{% url 'cart' %}" class="dropdown-item py-2">
+                                        <i class="fa fa-shopping-bag mr-2 text-primary"></i>My Cart
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    <a href="{% url 'logout' %}" class="dropdown-item py-2 text-danger">
+                                        <i class="fa fa-sign-out-alt mr-2"></i>Logout
+                                    </a>
+                                </div>
+                            </div>
+                            {% else %}
+                            <a href="{% url 'login' %}" class="nav-item nav-link">Login</a>
+                            <a href="{% url 'register' %}" class="nav-item nav-link">Register</a>
+                            {% endif %}
                         </div>
                     </div>
                 </nav>
@@ -163,18 +184,57 @@
     <!-- Navbar End -->
 
 
-    <!-- Page Header Start -->
-    <div class="container-fluid bg-secondary mb-5">
-        <div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 300px">
-            <h1 class="font-weight-semi-bold text-uppercase mb-3">Our Shop</h1>
-            <div class="d-inline-flex">
-                <p class="m-0"><a href="{% url 'index' %}">Home</a></p>
-                <p class="m-0 px-2">-</p>
-                <p class="m-0">Shop</p>
+    <!-- Shop Carousel (Discount & New Items) Start -->
+    <div class="container-fluid mb-5">
+        <div id="shop-carousel" class="carousel slide" data-ride="carousel" data-interval="4000">
+            <ol class="carousel-indicators">
+                {% for item in shop_carousel_items %}
+                <li data-target="#shop-carousel" data-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}"></li>
+                {% endfor %}
+            </ol>
+            <div class="carousel-inner">
+                {% for item in shop_carousel_items %}
+                <div class="carousel-item {% if forloop.first %}active{% endif %}" style="height: 340px; background: {% if item.image %}url('{{ item.image.url }}') center/cover no-repeat{% else %}linear-gradient(135deg, {% if item.item_type == 'discount' %}#ffebee, #ffcdd2{% else %}#e8f5e9, #c8e6c9{% endif %}){% endif %}; border-radius: 8px;">
+                    <div class="carousel-caption d-flex flex-column align-items-center justify-content-center" style="top: 0; bottom: 0; left: 0; right: 0; background: rgba(0, 0, 0, 0.45); border-radius: 8px;">
+                        <div class="p-3 text-center" style="max-width: 800px;">
+                            {% if item.badge_text %}
+                            <span class="badge {% if item.item_type == 'discount' %}badge-danger{% else %}badge-success{% endif %} text-uppercase px-3 py-2 mb-3 font-weight-bold" style="font-size: 14px; letter-spacing: 1px;">
+                                <i class="{% if item.item_type == 'discount' %}fa fa-tag{% else %}fa fa-star{% endif %} mr-1"></i>
+                                {{ item.badge_text }}
+                            </span>
+                            {% endif %}
+                            <h2 class="display-5 text-white font-weight-bold mb-2">{{ item.title }}</h2>
+                            {% if item.subtitle %}
+                            <p class="text-white-50 mb-3 font-weight-medium" style="font-size: 16px;">{{ item.subtitle }}</p>
+                            {% endif %}
+                            <a href="{{ item.link|default:'/shop/' }}" class="btn btn-primary py-2 px-4 font-weight-bold">
+                                Shop Now <i class="fa fa-arrow-right ml-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="carousel-item active" style="height: 300px; background: #EDF1FF;">
+                    <div class="carousel-caption d-flex flex-column align-items-center justify-content-center" style="top:0; bottom:0; left:0; right:0; background: rgba(0,0,0,0.3);">
+                        <h2 class="text-white font-weight-bold">Special Shop Discounts & New Arrivals</h2>
+                        <p class="text-white">Discover our top-rated collections today!</p>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
+            <a class="carousel-control-prev" href="#shop-carousel" data-slide="prev">
+                <div class="btn btn-dark" style="width: 45px; height: 45px;">
+                    <span class="carousel-control-prev-icon mb-n2"></span>
+                </div>
+            </a>
+            <a class="carousel-control-next" href="#shop-carousel" data-slide="next">
+                <div class="btn btn-dark" style="width: 45px; height: 45px;">
+                    <span class="carousel-control-next-icon mb-n2"></span>
+                </div>
+            </a>
         </div>
     </div>
-    <!-- Page Header End -->
+    <!-- Shop Carousel End -->
 
 
     <!-- Shop Start -->

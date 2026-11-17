@@ -19,7 +19,7 @@
 
 <link href="{% static 'lib/owlcarousel/assets/owl.carousel.min.css' %}" rel="stylesheet">
 
-<link href="{% static 'css/style.css' %}" rel="stylesheet">
+<link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
 
 </head>
 
@@ -214,8 +214,29 @@
                     </div>
 
                     <div class="navbar-nav ml-auto py-0">
-                        <a href="" class="nav-item nav-link">Login</a>
-                        <a href="" class="nav-item nav-link">Register</a>
+                        {% if request.user.is_authenticated %}
+                        <div class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-toggle="dropdown">
+                                <i class="fa fa-user-circle fa-lg mr-2 text-primary"></i>
+                                <span class="font-weight-semi-bold">{{ request.user.first_name|default:request.user.username }}</span>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-right rounded-0 m-0 shadow">
+                                <a href="{% url 'manage_account' %}" class="dropdown-item py-2">
+                                    <i class="fa fa-user-cog mr-2 text-primary"></i>Manage Account
+                                </a>
+                                <a href="{% url 'cart' %}" class="dropdown-item py-2">
+                                    <i class="fa fa-shopping-bag mr-2 text-primary"></i>My Cart
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a href="{% url 'logout' %}" class="dropdown-item py-2 text-danger">
+                                    <i class="fa fa-sign-out-alt mr-2"></i>Logout
+                                </a>
+                            </div>
+                        </div>
+                        {% else %}
+                        <a href="{% url 'login' %}" class="nav-item nav-link">Login</a>
+                        <a href="{% url 'register' %}" class="nav-item nav-link">Register</a>
+                        {% endif %}
                     </div>
 
                 </div>
