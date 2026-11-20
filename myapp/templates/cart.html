@@ -33,11 +33,11 @@
         <div class="row bg-secondary py-2 px-xl-5">
             <div class="col-lg-6 d-none d-lg-block">
                 <div class="d-inline-flex align-items-center">
-                    <a class="text-dark" href="">FAQs</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">FAQs</a>
                     <span class="text-muted px-2">|</span>
-                    <a class="text-dark" href="">Help</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">Help</a>
                     <span class="text-muted px-2">|</span>
-                    <a class="text-dark" href="">Support</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">Support</a>
                 </div>
             </div>
             <div class="col-lg-6 text-center text-lg-right">
@@ -82,11 +82,11 @@
             <div class="col-lg-3 col-6 text-right">
                 <a href="" class="btn border">
                     <i class="fas fa-heart text-primary"></i>
-                    <span class="badge">0</span>
+                    <span class="badge"></span>
                 </a>
                 <a href="{% url 'cart' %}" class="btn border">
                     <i class="fas fa-shopping-cart text-primary"></i>
-                    <span class="badge">0</span>
+                    <span class="badge"></span>
                 </a>
             </div>
         </div>
@@ -267,14 +267,25 @@
                 </form>
 
                 {% if messages %}
-                    {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                    {% endfor %}
+                    <div id="cart-messages-container">
+                        {% for message in messages %}
+                            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show shadow-sm" role="alert">
+                                {% if message.tags == 'success' %}
+                                    <i class="fa fa-check-circle mr-2"></i>
+                                {% elif message.tags == 'error' or message.tags == 'danger' %}
+                                    <i class="fa fa-exclamation-circle mr-2"></i>
+                                {% elif message.tags == 'warning' %}
+                                    <i class="fa fa-exclamation-triangle mr-2"></i>
+                                {% else %}
+                                    <i class="fa fa-info-circle mr-2"></i>
+                                {% endif %}
+                                {{ message }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        {% endfor %}
+                    </div>
                 {% endif %}
 
                 <!-- Check Coupon Validation Section (Compact Dropdown) -->
@@ -378,6 +389,29 @@
 
     <script>
     document.addEventListener("DOMContentLoaded", function () {
+        // Auto-dismiss all alerts after exactly 4 seconds (4000ms)
+        function autoDismissAlerts() {
+            setTimeout(function () {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(function (alert) {
+                    alert.style.transition = 'opacity 0.6s ease, max-height 0.6s ease, margin 0.6s ease, padding 0.6s ease';
+                    alert.style.opacity = '0';
+                    alert.style.maxHeight = '0px';
+                    alert.style.marginTop = '0px';
+                    alert.style.marginBottom = '0px';
+                    alert.style.paddingTop = '0px';
+                    alert.style.paddingBottom = '0px';
+                    alert.style.overflow = 'hidden';
+                    setTimeout(function () {
+                        if (alert.parentNode) {
+                            alert.parentNode.removeChild(alert);
+                        }
+                    }, 600);
+                });
+            }, 4000);
+        }
+        autoDismissAlerts();
+
         const dropdown = document.getElementById("couponValidation");
         const codeInput = document.getElementById("couponCodeInput");
         const couponHint = document.getElementById("couponHint");
@@ -499,6 +533,7 @@
     <script src="{% static 'mail/contact.js' %}"></script>
 
     <!-- Template Javascript -->
+    <script src="{% static 'js/main.js' %}"></script>
      
     <script>
 document.querySelectorAll('.quantity').forEach(function(box) {

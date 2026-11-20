@@ -1,0 +1,110 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Pay via BHIM UPI / QR Code - Order #{{ order.id }} | EShopper</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="{% static 'img/favicon.ico' %}" rel="icon">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.0/css/all.min.css" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+    <div class="container py-5 text-center">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card border-0 shadow p-4 p-md-5 bg-white" style="border-radius: 14px;">
+                    <!-- Header -->
+                    <div class="mb-3">
+                        <div class="d-inline-block p-3 rounded-circle bg-light mb-2">
+                            <i class="fa fa-qrcode fa-3x text-primary"></i>
+                        </div>
+                        <h4 class="font-weight-bold mb-1">BHIM UPI / QR Code Payment</h4>
+                        <p class="text-muted small">Scan with PhonePe, Google Pay, Paytm, BHIM, or any UPI App</p>
+                    </div>
+
+                    <!-- Amount Box -->
+                    <div class="alert alert-primary py-2 px-3 mb-3">
+                        <span class="small font-weight-bold text-uppercase d-block text-muted">Amount to Pay</span>
+                        <h2 class="font-weight-bold text-primary mb-0">₹{{ order.total_amount }}</h2>
+                        <small class="text-muted">Order #{{ order.id }} &bull; {{ order.receipt_number }}</small>
+                    </div>
+
+                    <!-- QR Code -->
+                    <div class="p-3 bg-white border rounded mb-3 shadow-sm d-inline-block" style="border: 2px dashed #007bff !important;">
+                        <img src="{{ qr_api_url }}" alt="Scan UPI QR Code" class="img-fluid rounded" style="width: 220px; height: 220px;">
+                        <div class="small text-dark font-weight-bold mt-2">
+                            <i class="fa fa-camera text-primary mr-1"></i> Scan with any UPI App to Pay
+                        </div>
+                    </div>
+
+                    <!-- Supported Apps Badges -->
+                    <div class="d-flex justify-content-center align-items-center mb-3 flex-wrap" style="gap: 6px;">
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-mobile-alt text-primary mr-1"></i>Google Pay</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-bolt mr-1" style="color: #5f259f;"></i>PhonePe</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-wallet text-info mr-1"></i>Paytm</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-university text-success mr-1"></i>BHIM</span>
+                    </div>
+
+                    <!-- UPI ID & Copy -->
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text bg-light small font-weight-bold text-muted">UPI ID</span>
+                        </div>
+                        <input type="text" id="upiIdInput" class="form-control text-center font-weight-bold bg-white" readonly value="{{ upi_id }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-primary" type="button" onclick="copyUpi()">
+                                <i class="fa fa-copy mr-1"></i> <span id="copyBtnTxt">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Direct Link -->
+                    <div class="mb-3 d-block d-sm-none">
+                        <a href="{{ upi_deep_link }}" class="btn btn-outline-primary btn-block font-weight-bold">
+                            <i class="fa fa-external-link-alt mr-1"></i> Open in UPI App
+                        </a>
+                    </div>
+
+                    <!-- Verification Form -->
+                    <form method="POST" action="{% url 'upi_verify' %}" class="card bg-light border p-3 text-left">
+                        {% csrf_token %}
+                        <input type="hidden" name="order_id" value="{{ order.id }}">
+                        <label class="font-weight-bold small text-dark mb-1">
+                            Enter 12-Digit UPI Ref / UTR No. <span class="text-muted font-weight-normal">(Optional)</span>:
+                        </label>
+                        <input type="text" name="upi_transaction_id" class="form-control mb-3" placeholder="e.g. 432109876543">
+                        <button type="submit" class="btn btn-success btn-block py-3 font-weight-bold shadow-sm">
+                            <i class="fa fa-check-circle mr-2"></i> Confirm Payment &amp; Get Receipt
+                        </button>
+                    </form>
+
+                    <div class="mt-4">
+                        <a href="{% url 'checkout' %}" class="text-muted small">
+                            <i class="fa fa-arrow-left mr-1"></i> Cancel and return to checkout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function copyUpi() {
+            var input = document.getElementById('upiIdInput');
+            input.select();
+            document.execCommand('copy');
+            document.getElementById('copyBtnTxt').innerText = 'Copied!';
+            setTimeout(function() {
+                document.getElementById('copyBtnTxt').innerText = 'Copy';
+            }, 2000);
+        }
+    </script>
+</body>
+
+</html>

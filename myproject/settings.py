@@ -45,7 +45,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'myapp.middleware.SeparateAdminSessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -149,5 +149,31 @@ MAILERS = {
 }
 
 DEFAULT_FROM_EMAIL = 'abhaysolanki5902@gmail.com'
+CONTACT_EMAIL_RECIPIENT = 'abhaysolanki5902@gmail.com'
+
+# Map Django message tags to Bootstrap 4 alert classes
+from django.contrib.messages import constants as messages_constants
+MESSAGE_TAGS = {
+    messages_constants.DEBUG: 'secondary',
+    messages_constants.INFO: 'info',
+    messages_constants.SUCCESS: 'success',
+    messages_constants.WARNING: 'warning',
+    messages_constants.ERROR: 'danger',
+}
+
+# Separate Admin Database and Client Storefront Sessions
+SESSION_COOKIE_NAME = 'eshop_sessionid'
+ADMIN_SESSION_COOKIE_NAME = 'admin_sessionid'
+
+# Razorpay Payment Gateway Configuration
+RAZORPAY_KEY_ID = 'rzp_test_U1zVcgfC6rteVZ'
+RAZORPAY_KEY_SECRET = 'KgDGD3p4nRB4As6yw1NdYb5p'
+
+# BHIM UPI / PhonePe / Google Pay / QR Code Configuration
+MERCHANT_UPI_ID = 'abhaysolanki5902@okhdfcbank'
+MERCHANT_UPI_NAME = 'EShopper Store'
+
+
+
 
 

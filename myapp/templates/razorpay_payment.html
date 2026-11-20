@@ -1,0 +1,116 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Processing Payment - Order #{{ order.id }} | EShopper</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="{% static 'img/favicon.ico' %}" rel="icon">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.0/css/all.min.css" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+    <div class="container py-5 text-center">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card border-secondary shadow-sm p-4 p-md-5 bg-white">
+                    <div class="mb-4">
+                        <i class="fa fa-credit-card fa-3x text-primary mb-3"></i>
+                        <h3 class="font-weight-bold">Complete Your Payment</h3>
+                        <p class="text-muted">Order #{{ order.id }} | Total: <strong class="text-primary">₹{{ order.total_amount }}</strong></p>
+                    </div>
+
+                    <div class="alert alert-info py-2 small mb-4">
+                        <i class="fa fa-lock mr-1"></i> Secure 256-bit encrypted payment via Razorpay.
+                    </div>
+
+                    <button id="rzp-button" class="btn btn-primary btn-block py-3 font-weight-bold shadow-sm mb-3">
+                        <i class="fa fa-lock mr-2"></i> Pay ₹{{ order.total_amount }} with Razorpay
+                    </button>
+
+                    {% if not razorpay_order_id %}
+                    <div class="alert alert-warning py-2 small mb-3 text-left">
+                        <i class="fa fa-info-circle mr-1"></i> <strong>Test Mode Note:</strong> Server-side order ID creation was skipped because Razorpay Secret Key needs verification. You can complete the test order below without getting stuck!
+                    </div>
+                    <button type="button" id="sim-pay-btn" class="btn btn-success btn-block py-3 font-weight-bold shadow-sm mb-3">
+                        <i class="fa fa-check-circle mr-2"></i> Complete Payment &amp; Get Receipt (Test Mode)
+                    </button>
+                    {% endif %}
+
+                    <form id="razorpay-form" method="POST" action="{% url 'razorpay_verify' %}" style="display: none;">
+                        {% csrf_token %}
+                        <input type="hidden" name="order_id" value="{{ order.id }}">
+                        <input type="hidden" name="razorpay_payment_id" id="rzp_payment_id">
+                        <input type="hidden" name="razorpay_order_id" id="rzp_order_id">
+                        <input type="hidden" name="razorpay_signature" id="rzp_signature">
+                    </form>
+
+                    <div class="mt-4">
+                        <a href="{% url 'checkout' %}" class="text-muted small">
+                            <i class="fa fa-arrow-left mr-1"></i> Cancel and return to checkout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Razorpay Checkout Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        var options = {
+            "key": "{{ razorpay_key_id }}",
+            "amount": "{{ amount_in_paise }}",
+            "currency": "INR",
+            "name": "EShopper",
+            "description": "Order #{{ order.id }} Payment",
+            "image": "{% static 'img/favicon.ico' %}",
+            {% if razorpay_order_id %}"order_id": "{{ razorpay_order_id }}",{% endif %}
+            "handler": function (response) {
+                document.getElementById('rzp_payment_id').value = response.razorpay_payment_id;
+                document.getElementById('rzp_order_id').value = response.razorpay_order_id || '';
+                document.getElementById('rzp_signature').value = response.razorpay_signature || '';
+                document.getElementById('razorpay-form').submit();
+            },
+            "prefill": {
+                "name": "{{ order.billing_address.first_name }} {{ order.billing_address.last_name }}",
+                "email": "{{ order.billing_address.email }}",
+                "contact": "{{ order.billing_address.mobile_no }}"
+            },
+            "theme": {
+                "color": "#D19C97"
+            }
+        };
+
+        var rzp1 = new Razorpay(options);
+
+        document.getElementById('rzp-button').onclick = function (e) {
+            rzp1.open();
+            e.preventDefault();
+        };
+
+        var simBtn = document.getElementById('sim-pay-btn');
+        if (simBtn) {
+            simBtn.onclick = function() {
+                document.getElementById('rzp_payment_id').value = "pay_test_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+                document.getElementById('rzp_order_id').value = "";
+                document.getElementById('rzp_signature').value = "simulated_sig";
+                document.getElementById('razorpay-form').submit();
+            };
+        }
+
+        {% if razorpay_order_id %}
+        // Auto open payment modal on load only when valid order_id exists
+        window.onload = function () {
+            rzp1.open();
+        };
+        {% endif %}
+    </script>
+</body>
+
+</html>

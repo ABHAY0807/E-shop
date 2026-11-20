@@ -87,4 +87,11 @@
         button.parent().parent().find('input').val(newVal);
     });
     
+    // Auto-dismiss all alerts after 4 seconds across the application
+    setTimeout(function () {
+        $('.alert').fadeTo(500, 0).slideUp(500, function () {
+            $(this).remove();
+        });
+    }, 4000);
+
 })(jQuery);

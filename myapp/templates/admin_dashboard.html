@@ -1,0 +1,1205 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Admin Dashboard &amp; Inventory Panel | EShopper</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="{% static 'img/favicon.ico' %}" rel="icon">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.0/css/all.min.css" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Poppins', sans-serif;
+            color: #333;
+        }
+
+        .admin-navbar {
+            background-color: #0c2340;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card {
+            border-radius: 12px;
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .nav-pills .nav-link {
+            border-radius: 8px;
+            color: #495057;
+            font-weight: 600;
+            padding: 12px 18px;
+            margin-bottom: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: #D19C97;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(209, 156, 151, 0.35);
+        }
+
+        .nav-pills .nav-link:hover:not(.active) {
+            background-color: #e9ecef;
+            color: #0c2340;
+        }
+
+        .table-card {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .table-responsive {
+            max-height: 650px;
+        }
+
+        .product-thumb {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .stock-badge-low {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .stock-badge-out {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .stock-badge-ok {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .quick-stock-btn {
+            padding: 2px 8px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Admin Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark admin-navbar sticky-top px-4 py-2">
+        <a class="navbar-brand font-weight-bold d-flex align-items-center" href="{% url 'admin_dashboard' %}">
+            <span class="text-primary border border-white px-2 mr-2 font-weight-bold">E</span>
+            <span>Shopper <span class="badge badge-warning text-dark font-weight-bold ml-1">ADMIN PANEL</span></span>
+        </a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#adminNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="adminNav">
+            <ul class="navbar-nav ml-auto align-items-center">
+                <li class="nav-item mr-3">
+                    <span class="badge badge-success text-white py-1 px-2 font-weight-normal" id="liveSyncStatusBadge" title="Real-time stock synchronization active">
+                        <i class="fa fa-sync-alt fa-spin mr-1" style="font-size:10px;"></i> Live Stock Sync
+                    </span>
+                </li>
+                <li class="nav-item mr-3">
+                    <a href="{% url 'index' %}" class="btn btn-sm btn-outline-light font-weight-bold" target="_blank">
+                        <i class="fa fa-external-link-alt mr-1"></i> Open Storefront
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white font-weight-bold d-flex align-items-center" href="#" id="adminUserDropdown" data-toggle="dropdown">
+                        <i class="fa fa-user-circle fa-lg mr-2 text-warning"></i>
+                        <span>{{ request.user.username }}</span>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow border-0 mt-2">
+                        <a class="dropdown-item" href="{% url 'manage_account' %}"><i class="fa fa-cog mr-2 text-muted"></i>My Account</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" href="{% url 'logout' %}"><i class="fa fa-sign-out-alt mr-2"></i>Logout</a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container-fluid py-4 px-md-4">
+
+        <!-- Flash Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                    <i class="fa fa-info-circle mr-1"></i> {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="row">
+            <!-- Sidebar Navigation -->
+            <div class="col-lg-2 col-md-3 mb-4">
+                <div class="bg-white p-3 rounded-lg shadow-sm">
+                    <small class="text-uppercase text-muted font-weight-bold d-block px-3 mb-2">Navigation</small>
+                    <div class="nav flex-column nav-pills" id="adminTab" role="tablist">
+                        <a class="nav-link {% if active_tab == 'overview' or not active_tab %}active{% endif %}" id="tab-overview" data-toggle="pill" href="#pane-overview" role="tab">
+                            <i class="fa fa-chart-line mr-2"></i> Overview
+                        </a>
+                        <a class="nav-link {% if active_tab == 'products' %}active{% endif %}" id="tab-products" data-toggle="pill" href="#pane-products" role="tab">
+                            <i class="fa fa-tshirt mr-2"></i> Products &amp; Stock
+                            <span class="badge badge-secondary float-right mt-1">{{ total_products }}</span>
+                        </a>
+                        <a class="nav-link {% if active_tab == 'orders' %}active{% endif %}" id="tab-orders" data-toggle="pill" href="#pane-orders" role="tab">
+                            <i class="fa fa-shopping-bag mr-2"></i> Orders
+                            <span class="badge badge-primary float-right mt-1">{{ total_orders }}</span>
+                        </a>
+                        <a class="nav-link {% if active_tab == 'coupons' %}active{% endif %}" id="tab-coupons" data-toggle="pill" href="#pane-coupons" role="tab">
+                            <i class="fa fa-tags mr-2"></i> Coupons
+                            <span class="badge badge-success float-right mt-1">{{ coupons|length }}</span>
+                        </a>
+                        <a class="nav-link {% if active_tab == 'messages' %}active{% endif %}" id="tab-messages" data-toggle="pill" href="#pane-messages" role="tab">
+                            <i class="fa fa-envelope mr-2"></i> Messages
+                            <span class="badge badge-info float-right mt-1">{{ messages_list|length }}</span>
+                        </a>
+                    </div>
+
+                    <hr>
+                    <div class="px-2">
+                        <small class="text-muted d-block mb-1">Quick Action</small>
+                        <button class="btn btn-sm btn-primary btn-block font-weight-bold" data-toggle="modal" data-target="#addProductModal">
+                            <i class="fa fa-plus-circle mr-1"></i> Add Product
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Panes -->
+            <div class="col-lg-10 col-md-9">
+                <div class="tab-content" id="adminTabContent">
+
+                    <!-- ============================================== -->
+                    <!-- 1. OVERVIEW TAB -->
+                    <!-- ============================================== -->
+                    <div class="tab-pane fade {% if active_tab == 'overview' or not active_tab %}show active{% endif %}" id="pane-overview" role="tabpanel">
+                        
+                        <!-- Top Stat Cards -->
+                        <div class="row">
+                            <div class="col-xl-3 col-md-6 mb-4">
+                                <div class="card stat-card shadow-sm p-3 bg-white">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <small class="text-uppercase font-weight-bold text-muted">Total Products</small>
+                                            <h2 class="font-weight-bold text-dark mb-0 mt-1" id="statTotalProducts">{{ total_products }}</h2>
+                                            <small class="text-success font-weight-bold"><i class="fa fa-box mr-1"></i><span id="statTotalStock">{{ total_stock }}</span> Total Units</small>
+                                        </div>
+                                        <div class="stat-icon bg-light text-primary">
+                                            <i class="fa fa-boxes"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-3 col-md-6 mb-4">
+                                <div class="card stat-card shadow-sm p-3 bg-white">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <small class="text-uppercase font-weight-bold text-muted">Total Orders</small>
+                                            <h2 class="font-weight-bold text-dark mb-0 mt-1">{{ total_orders }}</h2>
+                                            <small class="text-info font-weight-bold"><i class="fa fa-clock mr-1"></i>{{ orders_processing }} In Processing</small>
+                                        </div>
+                                        <div class="stat-icon bg-light text-info">
+                                            <i class="fa fa-shopping-cart"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-3 col-md-6 mb-4">
+                                <div class="card stat-card shadow-sm p-3 bg-white">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <small class="text-uppercase font-weight-bold text-muted">Total Paid Sales</small>
+                                            <h2 class="font-weight-bold text-success mb-0 mt-1">₹{{ total_revenue }}</h2>
+                                            <small class="text-muted">Confirmed Collections</small>
+                                        </div>
+                                        <div class="stat-icon bg-light text-success">
+                                            <i class="fa fa-rupee-sign"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-xl-3 col-md-6 mb-4">
+                                <div class="card stat-card shadow-sm p-3 bg-white">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <small class="text-uppercase font-weight-bold text-muted">Low / Out of Stock</small>
+                                            <h2 class="font-weight-bold text-danger mb-0 mt-1" id="statLowStockCount">{{ low_stock_products|length }}</h2>
+                                            <small class="text-danger font-weight-bold"><i class="fa fa-exclamation-triangle mr-1"></i><span id="statOutOfStockCount">{{ out_of_stock_count }}</span> Out of Stock</small>
+                                        </div>
+                                        <div class="stat-icon bg-light text-danger">
+                                            <i class="fa fa-exclamation-circle"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Order Status Breakdown Row -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card shadow-sm p-3 bg-white border-0" style="border-radius: 12px;">
+                                    <div class="d-flex align-items-center justify-content-between flex-wrap">
+                                        <span class="font-weight-bold text-dark mb-2 mb-md-0"><i class="fa fa-filter mr-1 text-primary"></i> Order Status Breakdown:</span>
+                                        <div class="d-flex align-items-center flex-wrap" style="gap: 12px;">
+                                            <span class="badge badge-warning px-3 py-2 font-weight-bold">Pending: {{ orders_pending }}</span>
+                                            <span class="badge badge-primary px-3 py-2 font-weight-bold">Processing: {{ orders_processing }}</span>
+                                            <span class="badge badge-info px-3 py-2 font-weight-bold">Shipped: {{ orders_shipped }}</span>
+                                            <span class="badge badge-success px-3 py-2 font-weight-bold">Delivered: {{ orders_delivered }}</span>
+                                            <span class="badge badge-danger px-3 py-2 font-weight-bold">Cancelled: {{ orders_cancelled }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Low Stock Critical Warning Table -->
+                        {% if low_stock_products %}
+                        <div class="card table-card mb-4 border-left border-warning" style="border-left-width: 5px !important;">
+                            <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+                                <h6 class="font-weight-bold text-danger m-0">
+                                    <i class="fa fa-exclamation-triangle mr-2"></i> Low Stock Alert (Needs Immediate Restock)
+                                </h6>
+                                <span class="badge badge-danger">{{ low_stock_products|length }} Items</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th>Product</th>
+                                                <th>Category</th>
+                                                <th>Variant (Color / Size)</th>
+                                                <th>Price</th>
+                                                <th>Current Stock</th>
+                                                <th>Quick Restock (+10)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for prod in low_stock_products %}
+                                            <tr>
+                                                <td class="font-weight-bold">
+                                                    {% if prod.image %}
+                                                    <img src="{{ prod.image.url }}" class="product-thumb mr-2" alt="">
+                                                    {% endif %}
+                                                    {{ prod.name }}
+                                                </td>
+                                                <td>{{ prod.subcategory.category.name }} &rsaquo; {{ prod.subcategory.name }}</td>
+                                                <td>{{ prod.color.name|default:'Default' }} / {{ prod.size.name|default:'Default' }}</td>
+                                                <td class="font-weight-bold">₹{{ prod.price }}</td>
+                                                <td>
+                                                    {% if prod.stock == 0 %}
+                                                    <span class="badge stock-badge-out px-2 py-1 font-weight-bold">0 OUT OF STOCK</span>
+                                                    {% else %}
+                                                    <span class="badge stock-badge-low px-2 py-1 font-weight-bold">{{ prod.stock }} units left</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <form method="POST" action="{% url 'admin_product_update_stock' prod.id %}" class="d-inline">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="increment">
+                                                        <input type="hidden" name="amount" value="10">
+                                                        <button type="submit" class="btn btn-sm btn-outline-success font-weight-bold">
+                                                            <i class="fa fa-plus mr-1"></i> Add 10 Units
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Recent Orders Table Preview -->
+                        <div class="card table-card mb-4">
+                            <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+                                <h6 class="font-weight-bold text-dark m-0"><i class="fa fa-receipt mr-2 text-primary"></i> Recent Store Orders</h6>
+                                <button class="btn btn-sm btn-outline-primary" onclick="$('#tab-orders').tab('show');">View All Orders</button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0 text-center">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th>Receipt #</th>
+                                                <th>Customer</th>
+                                                <th>Amount</th>
+                                                <th>Payment</th>
+                                                <th>Fulfillment Status</th>
+                                                <th>Date</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for ord in orders|slice:":8" %}
+                                            <tr>
+                                                <td class="font-weight-bold text-primary">{{ ord.receipt_number|default:ord.id }}</td>
+                                                <td>{{ ord.billing_address.first_name }} {{ ord.billing_address.last_name }}</td>
+                                                <td class="font-weight-bold">₹{{ ord.total_amount }}</td>
+                                                <td>
+                                                    <span class="badge badge-light border">{{ ord.payment_method }}</span>
+                                                    {% if ord.is_paid %}
+                                                    <span class="badge badge-success ml-1">Paid</span>
+                                                    {% else %}
+                                                    <span class="badge badge-warning text-dark ml-1">Pending</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-pill {% if ord.order_status == 'Delivered' %}badge-success{% elif ord.order_status == 'Processing' %}badge-primary{% elif ord.order_status == 'Shipped' %}badge-info{% elif ord.order_status == 'Cancelled' %}badge-danger{% else %}badge-warning text-dark{% endif %} px-2 py-1">
+                                                        {{ ord.order_status }}
+                                                    </span>
+                                                </td>
+                                                <td class="small text-muted">{{ ord.created_at|date:"d M Y, h:i A" }}</td>
+                                                <td>
+                                                    <a href="{% url 'order_receipt' ord.id %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                                        <i class="fa fa-file-invoice"></i> Receipt
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="7" class="py-4 text-muted">No orders found yet.</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- ============================================== -->
+                    <!-- 2. PRODUCTS & STOCK MANAGEMENT TAB -->
+                    <!-- ============================================== -->
+                    <div class="tab-pane fade {% if active_tab == 'products' %}show active{% endif %}" id="pane-products" role="tabpanel">
+                        <div class="card table-card mb-4">
+                            <div class="card-header bg-white py-3">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6 mb-2 mb-md-0">
+                                        <h5 class="font-weight-bold text-dark m-0">
+                                            <i class="fa fa-boxes mr-2 text-primary"></i> Product Catalog &amp; Live Stock Management
+                                        </h5>
+                                        <small class="text-muted">Total SKU Variants: <strong>{{ total_products }}</strong> &bull; Total Units: <strong>{{ total_stock }}</strong></small>
+                                    </div>
+                                    <div class="col-md-6 text-md-right">
+                                        <button class="btn btn-primary font-weight-bold shadow-sm" data-toggle="modal" data-target="#addProductModal">
+                                            <i class="fa fa-plus-circle mr-1"></i> Add New Product
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Search Filter Toolbar -->
+                            <div class="bg-light p-3 border-bottom">
+                                <div class="row">
+                                    <div class="col-md-5 mb-2 mb-md-0">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text bg-white"><i class="fa fa-search text-muted"></i></span>
+                                            </div>
+                                            <input type="text" id="productSearchInput" class="form-control" placeholder="Filter by product name, category, color...">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2 mb-md-0">
+                                        <select id="categoryFilterSelect" class="form-control">
+                                            <option value="">All Categories</option>
+                                            {% for cat in categories %}
+                                            <option value="{{ cat.name }}">{{ cat.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 text-right">
+                                        <button id="clearProductFiltersBtn" class="btn btn-outline-secondary btn-block">Clear Filters</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0 align-middle" id="productsTable">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th style="width: 70px;">Image</th>
+                                                <th>Product Name</th>
+                                                <th>Category / Subcategory</th>
+                                                <th>Variant</th>
+                                                <th>Price</th>
+                                                <th style="width: 220px;">Current Stock (Units)</th>
+                                                <th style="width: 140px;" class="text-center">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for prod in products %}
+                                            <tr data-prod-name="{{ prod.name|lower }}" data-cat-name="{{ prod.subcategory.category.name|lower }}" data-variant="{{ prod.color.name|lower }} {{ prod.size.name|lower }}">
+                                                <td>
+                                                    {% if prod.image %}
+                                                    <img src="{{ prod.image.url }}" class="product-thumb" alt="">
+                                                    {% else %}
+                                                    <div class="product-thumb bg-light text-muted d-flex align-items-center justify-content-center">
+                                                        <i class="fa fa-image"></i>
+                                                    </div>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <span class="font-weight-bold text-dark d-block">{{ prod.name }}</span>
+                                                    <small class="text-muted">ID #{{ prod.id }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light border">{{ prod.subcategory.category.name }}</span>
+                                                    <small class="d-block text-muted">{{ prod.subcategory.name }}</small>
+                                                </td>
+                                                <td>
+                                                    <span class="small font-weight-bold text-dark">{{ prod.color.name|default:'Any Color' }}</span> /
+                                                    <span class="small text-muted">{{ prod.size.name|default:'Any Size' }}</span>
+                                                </td>
+                                                <td class="font-weight-bold text-primary">₹{{ prod.price }}</td>
+                                                <td>
+                                                    <!-- Live Stock Control -->
+                                                    <div class="d-flex align-items-center">
+                                                        <button type="button" class="btn btn-sm btn-outline-danger quick-stock-btn mr-1 update-stock-btn" data-id="{{ prod.id }}" data-action="decrement" data-amount="1" title="Subtract 1 unit">-1</button>
+                                                        
+                                                        <span class="badge {% if prod.stock == 0 %}stock-badge-out{% elif prod.stock <= 5 %}stock-badge-low{% else %}stock-badge-ok{% endif %} px-2 py-2 font-weight-bold stock-display-{{ prod.id }} text-center" style="min-width: 70px;">
+                                                            {{ prod.stock }} units
+                                                        </span>
+
+                                                        <button type="button" class="btn btn-sm btn-outline-success quick-stock-btn ml-1 update-stock-btn" data-id="{{ prod.id }}" data-action="increment" data-amount="1" title="Add 1 unit">+1</button>
+                                                        <button type="button" class="btn btn-sm btn-outline-primary quick-stock-btn ml-1 update-stock-btn" data-id="{{ prod.id }}" data-action="increment" data-amount="5" title="Add 5 units">+5</button>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <button type="button" class="btn btn-sm btn-outline-primary mr-1 edit-prod-btn" 
+                                                            data-id="{{ prod.id }}"
+                                                            data-name="{{ prod.name }}"
+                                                            data-subcat="{{ prod.subcategory.id }}"
+                                                            data-color="{{ prod.color.id|default:'' }}"
+                                                            data-size="{{ prod.size.id|default:'' }}"
+                                                            data-price="{{ prod.price }}"
+                                                            data-stock="{{ prod.stock }}"
+                                                            title="Edit Product">
+                                                        <i class="fa fa-edit"></i>
+                                                    </button>
+                                                    <form method="POST" action="{% url 'admin_product_delete' prod.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete \'{{ prod.name }}\' (ID #{{ prod.id }})? This action cannot be undone.');">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Product">
+                                                            <i class="fa fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="7" class="py-5 text-center text-muted">No products found in the catalog.</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ============================================== -->
+                    <!-- 3. ORDERS & FULFILLMENT TAB -->
+                    <!-- ============================================== -->
+                    <div class="tab-pane fade {% if active_tab == 'orders' %}show active{% endif %}" id="pane-orders" role="tabpanel">
+                        <div class="card table-card mb-4">
+                            <div class="card-header bg-white py-3">
+                                <div class="d-flex align-items-center justify-content-between flex-wrap">
+                                    <div>
+                                        <h5 class="font-weight-bold text-dark m-0"><i class="fa fa-shopping-bag mr-2 text-primary"></i> Customer Orders &amp; Fulfillment</h5>
+                                        <small class="text-muted">Total Registered Orders: <strong>{{ total_orders }}</strong></small>
+                                    </div>
+                                    <div class="mt-2 mt-md-0">
+                                        <input type="text" id="orderSearchInput" class="form-control form-control-sm" placeholder="Search customer, receipt #...">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0 text-center" id="ordersTable">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th>Receipt #</th>
+                                                <th>Customer</th>
+                                                <th>Phone &bull; City</th>
+                                                <th>Total</th>
+                                                <th>Payment Method</th>
+                                                <th>Payment Status</th>
+                                                <th style="width: 170px;">Order Status</th>
+                                                <th>Date</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for ord in orders %}
+                                            <tr data-order-search="{{ ord.receipt_number|lower }} {{ ord.billing_address.first_name|lower }} {{ ord.billing_address.last_name|lower }} {{ ord.billing_address.mobile_no }}">
+                                                <td class="font-weight-bold text-primary">
+                                                    {{ ord.receipt_number|default:ord.id }}
+                                                    <small class="d-block text-muted">Order #{{ ord.id }}</small>
+                                                </td>
+                                                <td>
+                                                    <strong>{{ ord.billing_address.first_name }} {{ ord.billing_address.last_name }}</strong>
+                                                    <small class="d-block text-muted">{{ ord.billing_address.email }}</small>
+                                                </td>
+                                                <td>
+                                                    <small class="d-block font-weight-bold text-dark">{{ ord.billing_address.mobile_no }}</small>
+                                                    <small class="text-muted">{{ ord.billing_address.city }}, {{ ord.billing_address.state }}</small>
+                                                </td>
+                                                <td class="font-weight-bold text-primary">₹{{ ord.total_amount }}</td>
+                                                <td>
+                                                    <span class="badge badge-light border">{{ ord.payment_method }}</span>
+                                                    {% if ord.upi_transaction_id %}
+                                                    <small class="d-block text-muted">UTR: {{ ord.upi_transaction_id }}</small>
+                                                    {% elif ord.razorpay_payment_id %}
+                                                    <small class="d-block text-muted">{{ ord.razorpay_payment_id }}</small>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <form method="POST" action="{% url 'admin_order_status_update' ord.id %}" class="d-inline">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="is_paid" value="{% if ord.is_paid %}false{% else %}true{% endif %}">
+                                                        <button type="submit" class="btn btn-sm {% if ord.is_paid %}btn-success{% else %}btn-warning text-dark{% endif %} font-weight-bold py-1 px-2" title="Click to toggle Paid status">
+                                                            {% if ord.is_paid %}<i class="fa fa-check-circle mr-1"></i>PAID{% else %}<i class="fa fa-clock mr-1"></i>PENDING{% endif %}
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                                <td>
+                                                    <!-- Live Order Status Selector -->
+                                                    <form method="POST" action="{% url 'admin_order_status_update' ord.id %}" class="order-status-form">
+                                                        {% csrf_token %}
+                                                        <select name="order_status" class="custom-select custom-select-sm font-weight-bold" onchange="this.form.submit()">
+                                                            <option value="Pending" {% if ord.order_status == 'Pending' %}selected{% endif %}>Pending</option>
+                                                            <option value="Processing" {% if ord.order_status == 'Processing' %}selected{% endif %}>Processing</option>
+                                                            <option value="Shipped" {% if ord.order_status == 'Shipped' %}selected{% endif %}>Shipped</option>
+                                                            <option value="Delivered" {% if ord.order_status == 'Delivered' %}selected{% endif %}>Delivered</option>
+                                                            <option value="Cancelled" {% if ord.order_status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                                                        </select>
+                                                    </form>
+                                                </td>
+                                                <td class="small text-muted">{{ ord.created_at|date:"d M Y, h:i A" }}</td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-outline-info mr-1 view-order-btn" 
+                                                            data-id="{{ ord.id }}"
+                                                            data-receipt="{{ ord.receipt_number|default:ord.id }}"
+                                                            data-name="{{ ord.billing_address.first_name }} {{ ord.billing_address.last_name }}"
+                                                            data-email="{{ ord.billing_address.email }}"
+                                                            data-phone="{{ ord.billing_address.mobile_no }}"
+                                                            data-address="{{ ord.billing_address.address_line1 }}, {{ ord.billing_address.city }}, {{ ord.billing_address.state }} - {{ ord.billing_address.zip_code }}"
+                                                            data-total="₹{{ ord.total_amount }}"
+                                                            data-subtotal="₹{{ ord.subtotal }}"
+                                                            data-shipping="₹{{ ord.shipping }}"
+                                                            data-discount="₹{{ ord.discount }}"
+                                                            data-payment="{{ ord.payment_method }}"
+                                                            data-paid="{% if ord.is_paid %}PAID{% else %}PENDING{% endif %}"
+                                                            data-utr="{{ ord.upi_transaction_id|default:'' }}"
+                                                            data-rzp="{{ ord.razorpay_payment_id|default:'' }}"
+                                                            title="View Order Details">
+                                                        <i class="fa fa-eye"></i>
+                                                    </button>
+                                                    <a href="{% url 'order_receipt' ord.id %}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Print Invoice">
+                                                        <i class="fa fa-print"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="9" class="py-5 text-center text-muted">No orders placed yet.</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ============================================== -->
+                    <!-- 4. COUPONS MANAGEMENT TAB -->
+                    <!-- ============================================== -->
+                    <div class="tab-pane fade {% if active_tab == 'coupons' %}show active{% endif %}" id="pane-coupons" role="tabpanel">
+                        <div class="row">
+                            <div class="col-lg-4 mb-4">
+                                <div class="card shadow-sm p-4 bg-white border-0" style="border-radius: 12px;">
+                                    <h5 class="font-weight-bold text-dark mb-3"><i class="fa fa-plus-circle mr-2 text-success"></i> Create New Coupon</h5>
+                                    
+                                    <form method="POST" action="{% url 'admin_coupon_add' %}">
+                                        {% csrf_token %}
+                                        <div class="form-group">
+                                            <label class="small font-weight-bold">Coupon Code *</label>
+                                            <input type="text" name="code" class="form-control text-uppercase font-weight-bold" placeholder="e.g. SUMMER25" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="small font-weight-bold">Discount Percentage (%) *</label>
+                                            <input type="number" step="0.01" min="1" max="100" name="discount" class="form-control" placeholder="e.g. 25" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="small font-weight-bold">Expiry Duration *</label>
+                                            <select name="duration" class="custom-select">
+                                                <option value="12h">12 Hours</option>
+                                                <option value="1d">1 Day</option>
+                                                <option value="2d" selected>2 Days</option>
+                                                <option value="3d">3 Days</option>
+                                                <option value="7d">7 Days</option>
+                                                <option value="30d">30 Days</option>
+                                                <option value="custom">No Expiry (Always Active)</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn btn-success btn-block py-2 font-weight-bold shadow-sm">
+                                            <i class="fa fa-save mr-1"></i> Save Coupon
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-8 mb-4">
+                                <div class="card table-card">
+                                    <div class="card-header bg-white py-3">
+                                        <h5 class="font-weight-bold text-dark m-0"><i class="fa fa-tags mr-2 text-primary"></i> Promotional Coupons</h5>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0 text-center">
+                                                <thead class="bg-light">
+                                                    <tr>
+                                                        <th>Code</th>
+                                                        <th>Discount</th>
+                                                        <th>Duration</th>
+                                                        <th>Remaining Time</th>
+                                                        <th>Active</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for c in coupons %}
+                                                    <tr>
+                                                        <td class="font-weight-bold text-primary">{{ c.code }}</td>
+                                                        <td class="font-weight-bold text-success">{{ c.discount }}% OFF</td>
+                                                        <td><span class="badge badge-light border">{{ c.get_duration_display }}</span></td>
+                                                        <td>
+                                                            {% if c.is_expired %}
+                                                            <span class="badge badge-danger">EXPIRED</span>
+                                                            {% else %}
+                                                            <span class="badge badge-info">{{ c.time_remaining_display }}</span>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td>
+                                                            <form method="POST" action="{% url 'admin_coupon_toggle' c.id %}" class="d-inline">
+                                                                {% csrf_token %}
+                                                                <button type="submit" class="btn btn-sm {% if c.active %}btn-success{% else %}btn-secondary{% endif %} font-weight-bold py-1 px-2">
+                                                                    {% if c.active %}ACTIVE{% else %}DISABLED{% endif %}
+                                                                </button>
+                                                            </form>
+                                                        </td>
+                                                        <td>
+                                                            <form method="POST" action="{% url 'admin_coupon_delete' c.id %}" class="d-inline" onsubmit="return confirm('Delete coupon {{ c.code }}?');">
+                                                                {% csrf_token %}
+                                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                                    <i class="fa fa-trash"></i>
+                                                                </button>
+                                                            </form>
+                                                        </td>
+                                                    </tr>
+                                                    {% empty %}
+                                                    <tr>
+                                                        <td colspan="6" class="py-4 text-muted">No coupons created yet.</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ============================================== -->
+                    <!-- 5. CUSTOMER INQUIRIES TAB -->
+                    <!-- ============================================== -->
+                    <div class="tab-pane fade {% if active_tab == 'messages' %}show active{% endif %}" id="pane-messages" role="tabpanel">
+                        <div class="card table-card mb-4">
+                            <div class="card-header bg-white py-3">
+                                <h5 class="font-weight-bold text-dark m-0"><i class="fa fa-envelope mr-2 text-primary"></i> Customer Contact Inquiries</h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="bg-light">
+                                            <tr>
+                                                <th style="width: 50px;">Status</th>
+                                                <th>Sender</th>
+                                                <th>Subject</th>
+                                                <th>Message</th>
+                                                <th>Received Date</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for msg in messages_list %}
+                                            <tr class="{% if not msg.is_read %}table-warning{% endif %}">
+                                                <td class="text-center">
+                                                    {% if msg.is_read %}
+                                                    <i class="fa fa-check text-muted" title="Read"></i>
+                                                    {% else %}
+                                                    <i class="fa fa-envelope text-primary" title="Unread"></i>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <strong>{{ msg.name }}</strong>
+                                                    <small class="d-block text-muted">{{ msg.email }}</small>
+                                                </td>
+                                                <td class="font-weight-bold">{{ msg.subject }}</td>
+                                                <td class="text-muted" style="max-width: 320px;">{{ msg.message|truncatewords:20 }}</td>
+                                                <td class="small text-muted">{{ msg.created_at|date:"d M Y, h:i A" }}</td>
+                                                <td>
+                                                    <form method="POST" action="{% url 'admin_message_toggle_read' msg.id %}" class="d-inline">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                                            {% if msg.is_read %}Mark Unread{% else %}Mark Read{% endif %}
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="6" class="py-4 text-center text-muted">No customer inquiries yet.</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: ADD NEW PRODUCT -->
+    <!-- ============================================== -->
+    <div class="modal fade" id="addProductModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content shadow border-0" style="border-radius: 14px;">
+                <div class="modal-header text-white" style="background-color: #0c2340;">
+                    <h5 class="modal-title font-weight-bold"><i class="fa fa-plus-circle mr-2 text-primary"></i> Add New Product Variant</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <form method="POST" action="{% url 'admin_product_add' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="modal-body p-4">
+                        <div class="row">
+                            <div class="col-md-8 form-group">
+                                <label class="small font-weight-bold">Product Name *</label>
+                                <input type="text" name="name" class="form-control" placeholder="e.g. Slim Fit Cotton T-Shirt" required>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Price (₹) *</label>
+                                <input type="number" step="0.01" min="1" name="price" class="form-control" placeholder="499.00" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Subcategory / Category *</label>
+                                <select name="subcategory" class="custom-select" required>
+                                    <option value="" disabled selected>Select Subcategory</option>
+                                    {% for sub in subcategories %}
+                                    <option value="{{ sub.id }}">{{ sub.category.name }} &rsaquo; {{ sub.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Color Variant</label>
+                                <select name="color" class="custom-select">
+                                    <option value="">No specific color</option>
+                                    {% for col in colors %}
+                                    <option value="{{ col.id }}">{{ col.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Size Variant</label>
+                                <select name="size" class="custom-select">
+                                    <option value="">No specific size</option>
+                                    {% for sz in sizes %}
+                                    <option value="{{ sz.id }}">{{ sz.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label class="small font-weight-bold">Initial Available Stock (Quantity) *</label>
+                                <input type="number" min="0" name="stock" class="form-control font-weight-bold text-success" value="10" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label class="small font-weight-bold">Product Image</label>
+                                <input type="file" name="image" class="form-control-file border p-1 rounded">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary font-weight-bold px-4">
+                            <i class="fa fa-save mr-1"></i> Save Product
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: EDIT PRODUCT -->
+    <!-- ============================================== -->
+    <div class="modal fade" id="editProductModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content shadow border-0" style="border-radius: 14px;">
+                <div class="modal-header text-white" style="background-color: #0c2340;">
+                    <h5 class="modal-title font-weight-bold"><i class="fa fa-edit mr-2 text-warning"></i> Edit Product &amp; Stock</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <form id="editProductForm" method="POST" action="" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="modal-body p-4">
+                        <div class="row">
+                            <div class="col-md-8 form-group">
+                                <label class="small font-weight-bold">Product Name *</label>
+                                <input type="text" id="editProdName" name="name" class="form-control" required>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Price (₹) *</label>
+                                <input type="number" step="0.01" min="1" id="editProdPrice" name="price" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Subcategory / Category *</label>
+                                <select id="editProdSubcat" name="subcategory" class="custom-select" required>
+                                    {% for sub in subcategories %}
+                                    <option value="{{ sub.id }}">{{ sub.category.name }} &rsaquo; {{ sub.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Color Variant</label>
+                                <select id="editProdColor" name="color" class="custom-select">
+                                    <option value="">No specific color</option>
+                                    {% for col in colors %}
+                                    <option value="{{ col.id }}">{{ col.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 form-group">
+                                <label class="small font-weight-bold">Size Variant</label>
+                                <select id="editProdSize" name="size" class="custom-select">
+                                    <option value="">No specific size</option>
+                                    {% for sz in sizes %}
+                                    <option value="{{ sz.id }}">{{ sz.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label class="small font-weight-bold">Available Stock (Quantity) *</label>
+                                <input type="number" min="0" id="editProdStock" name="stock" class="form-control font-weight-bold text-success" required>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label class="small font-weight-bold">Replace Product Image (Optional)</label>
+                                <input type="file" name="image" class="form-control-file border p-1 rounded">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary font-weight-bold px-4">
+                            <i class="fa fa-save mr-1"></i> Update Product
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: ORDER DETAILS -->
+    <!-- ============================================== -->
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content shadow border-0" style="border-radius: 14px;">
+                <div class="modal-header text-white" style="background-color: #0c2340;">
+                    <h5 class="modal-title font-weight-bold"><i class="fa fa-file-invoice mr-2 text-primary"></i> Order Details: <span id="modalOrderReceiptText">#</span></h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-muted small text-uppercase mb-1">Customer &amp; Shipping Info:</h6>
+                            <h5 class="font-weight-bold text-dark mb-1" id="modalCustomerName">--</h5>
+                            <p class="mb-1 text-muted"><i class="fa fa-envelope mr-1"></i> <span id="modalCustomerEmail">--</span></p>
+                            <p class="mb-1 text-muted"><i class="fa fa-phone mr-1"></i> <span id="modalCustomerPhone">--</span></p>
+                            <p class="mb-0 text-muted"><i class="fa fa-map-marker-alt mr-1"></i> <span id="modalCustomerAddress">--</span></p>
+                        </div>
+                        <div class="col-md-6 text-md-right mt-3 mt-md-0">
+                            <h6 class="font-weight-bold text-muted small text-uppercase mb-1">Payment Summary:</h6>
+                            <h3 class="font-weight-bold text-primary mb-1" id="modalOrderTotal">₹0.00</h3>
+                            <p class="mb-1"><strong>Method:</strong> <span class="badge badge-secondary" id="modalPaymentMethod">--</span></p>
+                            <p class="mb-1"><strong>Status:</strong> <span class="badge badge-success" id="modalPaymentStatus">PAID</span></p>
+                            <p class="mb-0 small text-muted" id="modalTxnRef"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light justify-content-between">
+                    <a id="modalPrintReceiptBtn" href="#" target="_blank" class="btn btn-primary font-weight-bold">
+                        <i class="fa fa-print mr-1"></i> Open Printable Tax Invoice &amp; Receipt
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    $(function () {
+        // CSRF Token setup for AJAX
+        function getCsrfToken() {
+            var cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = jQuery.trim(cookies[i]);
+                    if (cookie.substring(0, 10) === ('csrftoken=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(10));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Live stock updater button handler (+1, -1, +5)
+        $('.update-stock-btn').on('click', function () {
+            var $btn = $(this);
+            var prodId = $btn.data('id');
+            var action = $btn.data('action');
+            var amount = $btn.data('amount');
+
+            $btn.prop('disabled', true);
+
+            $.ajax({
+                url: '/admin-dashboard/product/update-stock/' + prodId + '/',
+                type: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+                data: {
+                    'action': action,
+                    'amount': amount,
+                    'is_ajax': 'true'
+                },
+                success: function (res) {
+                    $btn.prop('disabled', false);
+                    if (res.status === 'success') {
+                        var $badge = $('.stock-display-' + prodId);
+                        $badge.text(res.stock + ' units');
+
+                        // Update badge color
+                        $badge.removeClass('stock-badge-out stock-badge-low stock-badge-ok');
+                        if (res.stock === 0) {
+                            $badge.addClass('stock-badge-out');
+                        } else if (res.stock <= 5) {
+                            $badge.addClass('stock-badge-low');
+                        } else {
+                            $badge.addClass('stock-badge-ok');
+                        }
+                    }
+                },
+                error: function () {
+                    $btn.prop('disabled', false);
+                    alert('Failed to update stock quantity. Please refresh and try again.');
+                }
+            });
+        });
+
+        // Edit Product Modal population
+        $('.edit-prod-btn').on('click', function () {
+            var $btn = $(this);
+            var id = $btn.data('id');
+            $('#editProductForm').attr('action', '/admin-dashboard/product/edit/' + id + '/');
+            $('#editProdName').val($btn.data('name'));
+            $('#editProdPrice').val($btn.data('price'));
+            $('#editProdStock').val($btn.data('stock'));
+            $('#editProdSubcat').val($btn.data('subcat'));
+            $('#editProdColor').val($btn.data('color'));
+            $('#editProdSize').val($btn.data('size'));
+            $('#editProductModal').modal('show');
+        });
+
+        // View Order Details Modal
+        $('.view-order-btn').on('click', function () {
+            var $btn = $(this);
+            var id = $btn.data('id');
+            $('#modalOrderReceiptText').text($btn.data('receipt'));
+            $('#modalCustomerName').text($btn.data('name'));
+            $('#modalCustomerEmail').text($btn.data('email'));
+            $('#modalCustomerPhone').text($btn.data('phone'));
+            $('#modalCustomerAddress').text($btn.data('address'));
+            $('#modalOrderTotal').text($btn.data('total'));
+            $('#modalPaymentMethod').text($btn.data('payment'));
+            $('#modalPaymentStatus').text($btn.data('paid'));
+            
+            var txn = $btn.data('utr') || $btn.data('rzp');
+            if (txn) {
+                $('#modalTxnRef').text('Ref / UTR: ' + txn).show();
+            } else {
+                $('#modalTxnRef').hide();
+            }
+
+            $('#modalPrintReceiptBtn').attr('href', '/order-receipt/' + id + '/');
+            $('#orderDetailsModal').modal('show');
+        });
+
+        // Product Catalog Search & Category Filter
+        function filterProducts() {
+            var searchTxt = $('#productSearchInput').val().toLowerCase();
+            var categoryVal = $('#categoryFilterSelect').val().toLowerCase();
+
+            $('#productsTable tbody tr').each(function () {
+                var $row = $(this);
+                var prodName = ($row.data('prod-name') || '').toString();
+                var catName = ($row.data('cat-name') || '').toString();
+                var variant = ($row.data('variant') || '').toString();
+
+                var matchesSearch = !searchTxt || (prodName.indexOf(searchTxt) !== -1 || catName.indexOf(searchTxt) !== -1 || variant.indexOf(searchTxt) !== -1);
+                var matchesCat = !categoryVal || (catName.indexOf(categoryVal) !== -1);
+
+                if (matchesSearch && matchesCat) {
+                    $row.show();
+                } else {
+                    $row.hide();
+                }
+            });
+        }
+
+        $('#productSearchInput').on('keyup', filterProducts);
+        $('#categoryFilterSelect').on('change', filterProducts);
+        $('#clearProductFiltersBtn').on('click', function () {
+            $('#productSearchInput').val('');
+            $('#categoryFilterSelect').val('');
+            filterProducts();
+        });
+
+        // Order Filter
+        $('#orderSearchInput').on('keyup', function () {
+            var txt = $(this).val().toLowerCase();
+            $('#ordersTable tbody tr').each(function () {
+                var rowData = ($(this).data('order-search') || '').toString();
+                if (!txt || rowData.indexOf(txt) !== -1) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+        });
+
+        // Real-Time Stock Synchronization (Every 5 seconds)
+        function syncLiveStock() {
+            $.ajax({
+                url: '/api/products/live-stock/',
+                type: 'GET',
+                cache: false,
+                success: function (res) {
+                    if (res.status === 'success') {
+                        // Update Header Stat Cards
+                        if ($('#statTotalProducts').length) $('#statTotalProducts').text(res.total_products);
+                        if ($('#statTotalStock').length) $('#statTotalStock').text(res.total_stock);
+                        if ($('#statLowStockCount').length) $('#statLowStockCount').text(res.low_stock_count + res.out_of_stock_count);
+                        if ($('#statOutOfStockCount').length) $('#statOutOfStockCount').text(res.out_of_stock_count);
+
+                        // Update Table Badges & Data Attributes
+                        if (res.products && res.products.length > 0) {
+                            res.products.forEach(function (item) {
+                                var $badge = $('.stock-display-' + item.id);
+                                if ($badge.length) {
+                                    $badge.text(item.stock + ' units');
+                                    $badge.removeClass('stock-badge-out stock-badge-low stock-badge-ok');
+                                    if (item.stock === 0) {
+                                        $badge.addClass('stock-badge-out');
+                                    } else if (item.stock <= 5) {
+                                        $badge.addClass('stock-badge-low');
+                                    } else {
+                                        $badge.addClass('stock-badge-ok');
+                                    }
+                                }
+                                var $editBtn = $('.edit-prod-btn[data-id="' + item.id + '"]');
+                                if ($editBtn.length) {
+                                    $editBtn.data('stock', item.stock);
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
+        setInterval(syncLiveStock, 5000);
+    });
+    </script>
+</body>
+
+</html>

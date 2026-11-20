@@ -33,11 +33,11 @@
         <div class="row bg-secondary py-2 px-xl-5">
             <div class="col-lg-6 d-none d-lg-block">
                 <div class="d-inline-flex align-items-center">
-                    <a class="text-dark" href="">FAQs</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">FAQs</a>
                     <span class="text-muted px-2">|</span>
-                    <a class="text-dark" href="">Help</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">Help</a>
                     <span class="text-muted px-2">|</span>
-                    <a class="text-dark" href="">Support</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">Support</a>
                 </div>
             </div>
             <div class="col-lg-6 text-center text-lg-right">
@@ -82,11 +82,11 @@
             <div class="col-lg-3 col-6 text-right">
                 <a href="" class="btn border">
                     <i class="fas fa-heart text-primary"></i>
-                    <span class="badge">0</span>
+                    <span class="badge"></span>
                 </a>
                 <a href="{% url 'cart' %}" class="btn border">
                     <i class="fas fa-shopping-cart text-primary"></i>
-                    <span class="badge">0</span>
+                    <span class="badge"></span>
                 </a>
             </div>
         </div>
@@ -198,39 +198,60 @@
 
 
     <!-- Contact Start -->
-    <div class="container-fluid pt-5">
+    <div class="container-fluid pt-5" id='c'>
         <div class="text-center mb-4">
             <h2 class="section-title px-5"><span class="px-2">Contact For Any Queries</span></h2>
         </div>
+
+        {% if messages %}
+        <div class="row px-xl-5 mb-3">
+            <div class="col-12" id="contact-messages-container">
+                {% for message in messages %}
+                    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show shadow-sm" role="alert">
+                        {% if message.tags == 'success' %}
+                            <i class="fa fa-check-circle mr-2"></i>
+                        {% else %}
+                            <i class="fa fa-exclamation-circle mr-2"></i>
+                        {% endif %}
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="row px-xl-5">
             <div class="col-lg-7 mb-5">
                 <div class="contact-form">
                     <div id="success"></div>
-                    <form name="sentMessage" id="contactForm" novalidate="novalidate">
+                    <form method="POST" action="{% url 'contact' %}" name="sentMessage" id="contactForm" novalidate="novalidate">
+                        {% csrf_token %}
                         <div class="control-group">
-                            <input type="text" class="form-control" id="name" placeholder="Your Name"
+                            <input type="text" class="form-control" name="name" id="name" placeholder="Your Name"
                                 required="required" data-validation-required-message="Please enter your name" />
                             <p class="help-block text-danger"></p>
                         </div>
                         <div class="control-group">
-                            <input type="email" class="form-control" id="email" placeholder="Your Email"
+                            <input type="email" class="form-control" name="email" id="email" placeholder="Your Email"
                                 required="required" data-validation-required-message="Please enter your email" />
                             <p class="help-block text-danger"></p>
                         </div>
                         <div class="control-group">
-                            <input type="text" class="form-control" id="subject" placeholder="Subject"
+                            <input type="text" class="form-control" name="subject" id="subject" placeholder="Subject"
                                 required="required" data-validation-required-message="Please enter a subject" />
                             <p class="help-block text-danger"></p>
                         </div>
                         <div class="control-group">
-                            <textarea class="form-control" rows="6" id="message" placeholder="Message"
+                            <textarea class="form-control" rows="6" name="message" id="message" placeholder="Message"
                                 required="required"
                                 data-validation-required-message="Please enter your message"></textarea>
                             <p class="help-block text-danger"></p>
                         </div>
                         <div>
-                            <button class="btn btn-primary py-2 px-4" type="submit" id="sendMessageButton">Send
-                                Message</button>
+                            <button class="btn btn-primary py-2 px-4 font-weight-bold" type="submit" id="sendMessageButton">Send Message</button>
                         </div>
                     </form>
                 </div>
@@ -353,10 +374,89 @@
 
     <!-- Contact Javascript File -->
     <script src="{% static 'mail/jqBootstrapValidation.min.js' %}"></script>
-    <script src="{% static 'mail/contact.js' %}"></script>
+    <script src="{% static 'mail/contact.js' %}?v=3"></script>
 
     <!-- Template Javascript -->
-    <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'js/main.js' %}?v=3"></script>
+
+    <script>
+    $(function () {
+        // Ensure form submission always goes to Django contact endpoint
+        $("#contactForm").off("submit").on("submit", function (e) {
+            e.preventDefault();
+
+            var name = $("input#name").val().trim();
+            var email = $("input#email").val().trim();
+            var subject = $("input#subject").val().trim();
+            var message = $("textarea#message").val().trim();
+
+            if (!name || !email || !subject || !message) {
+                return;
+            }
+
+            var csrfToken = $("input[name='csrfmiddlewaretoken']").val();
+            var $btn = $("#sendMessageButton");
+            var originalText = $btn.text();
+            $btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin mr-1"></i>Sending...');
+
+            $.ajax({
+                url: "{% url 'contact' %}",
+                type: "POST",
+                headers: {
+                    "X-CSRFToken": csrfToken
+                },
+                data: {
+                    csrfmiddlewaretoken: csrfToken,
+                    is_ajax: "true",
+                    name: name,
+                    email: email,
+                    subject: subject,
+                    message: message
+                },
+                cache: false,
+                success: function (response) {
+                    var successMessage = (response && response.message) ? response.message : "Your message has been sent successfully!";
+                    $('#success').html(
+                        "<div class='alert alert-success alert-dismissible fade show shadow-sm' role='alert'>" +
+                        "<i class='fa fa-check-circle mr-2'></i><strong>" + successMessage + "</strong>" +
+                        "<button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>" +
+                        "</div>"
+                    );
+                    $('#contactForm').trigger("reset");
+
+                    setTimeout(function () {
+                        $('#success .alert').fadeTo(500, 0).slideUp(500, function () {
+                            $(this).remove();
+                        });
+                    }, 4000);
+                },
+                error: function (xhr) {
+                    var errorMsg = "Sorry " + name + ", could not send message. Please try again later.";
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    $('#success').html(
+                        "<div class='alert alert-danger alert-dismissible fade show shadow-sm' role='alert'>" +
+                        "<i class='fa fa-exclamation-circle mr-2'></i><strong>" + errorMsg + "</strong>" +
+                        "<button type='button' class='close' data-dismiss='alert' aria-label='Close'><span aria-hidden='true'>&times;</span></button>" +
+                        "</div>"
+                    );
+
+                    setTimeout(function () {
+                        $('#success .alert').fadeTo(500, 0).slideUp(500, function () {
+                            $(this).remove();
+                        });
+                    }, 4000);
+                },
+                complete: function () {
+                    setTimeout(function () {
+                        $btn.prop("disabled", false).text(originalText);
+                    }, 800);
+                }
+            });
+        });
+    });
+    </script>
 </body>
 
 </html>

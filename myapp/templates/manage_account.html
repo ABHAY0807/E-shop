@@ -327,6 +327,62 @@
                 </div>
 
                 <!-- Card 3: Change Password -->
+                <!-- Card: My Orders & Receipts -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header bg-secondary border-0 d-flex justify-content-between align-items-center">
+                        <h5 class="font-weight-semi-bold m-0"><i class="fa fa-receipt text-primary mr-2"></i>My Orders &amp; Receipts</h5>
+                        <span class="badge badge-primary px-3 py-1">{{ user_orders|length }} Order{{ user_orders|length|pluralize }}</span>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if user_orders %}
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 text-center">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th>Receipt #</th>
+                                            <th>Date</th>
+                                            <th>Total</th>
+                                            <th>Payment</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ord in user_orders %}
+                                        <tr>
+                                            <td class="font-weight-bold text-primary">{{ ord.receipt_number|default:ord.id }}</td>
+                                            <td class="small">{{ ord.created_at|date:"d M Y" }}</td>
+                                            <td class="font-weight-bold">₹{{ ord.total_amount }}</td>
+                                            <td>
+                                                <span class="badge badge-light border">{{ ord.payment_method }}</span>
+                                            </td>
+                                            <td>
+                                                {% if ord.is_paid %}
+                                                    <span class="badge badge-success px-2 py-1"><i class="fa fa-check-circle mr-1"></i>Paid</span>
+                                                {% else %}
+                                                    <span class="badge badge-warning text-dark px-2 py-1"><i class="fa fa-clock mr-1"></i>{{ ord.order_status }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'order_receipt' ord.id %}" target="_blank" class="btn btn-sm btn-outline-primary py-1 px-2">
+                                                    <i class="fa fa-print mr-1"></i>Receipt
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="fa fa-shopping-bag fa-2x mb-2 text-muted"></i>
+                                <p class="mb-2">You haven't placed any orders yet.</p>
+                                <a href="{% url 'shop' %}" class="btn btn-sm btn-primary">Start Shopping</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
                 <div class="card border-secondary">
                     <div class="card-header bg-secondary border-0">
                         <h5 class="font-weight-semi-bold m-0"><i class="fa fa-key text-primary mr-2"></i>Change Password</h5>

@@ -1,0 +1,298 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Receipt - Order #{{ order.id }} | EShopper</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+
+    <!-- Favicon -->
+    <link href="{% static 'img/favicon.ico' %}" rel="icon">
+
+    <!-- Google Web Fonts -->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.10.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Customized Bootstrap Stylesheet -->
+    <link href="{% static 'css/style.css' %}?v=1" rel="stylesheet">
+
+    <style>
+        .receipt-card {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e2e8f0;
+        }
+
+        .receipt-header {
+            border-bottom: 2px dashed #e2e8f0;
+            padding-bottom: 24px;
+        }
+
+        .receipt-watermark {
+            font-size: 13px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .receipt-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            border-top: none;
+        }
+
+        .receipt-table td {
+            vertical-align: middle;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: #ffffff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .no-print,
+            .topbar-wrapper,
+            .navbar-wrapper,
+            .footer-wrapper,
+            .back-to-top {
+                display: none !important;
+            }
+
+            .receipt-container {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .receipt-card {
+                box-shadow: none !important;
+                border: 1px solid #ccc !important;
+                padding: 20px !important;
+            }
+
+            .container-fluid {
+                padding: 0 !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+    <!-- Topbar Start (Screen Only) -->
+    <div class="container-fluid topbar-wrapper no-print">
+        <div class="row align-items-center py-3 px-xl-5">
+            <div class="col-lg-6 col-6">
+                <a href="{% url 'index' %}" class="text-decoration-none">
+                    <h1 class="m-0 display-5 font-weight-semi-bold">
+                        <span class="text-primary font-weight-bold border px-3 mr-1">E</span>Shopper
+                    </h1>
+                </a>
+            </div>
+            <div class="col-lg-6 col-6 text-right">
+                <a href="{% url 'shop' %}" class="btn btn-outline-primary mr-2">
+                    <i class="fa fa-shopping-bag mr-1"></i> Continue Shopping
+                </a>
+                {% if request.user.is_authenticated %}
+                <a href="{% url 'manage_account' %}" class="btn btn-primary">
+                    <i class="fa fa-user mr-1"></i> My Account
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <!-- Topbar End -->
+
+    <!-- Main Receipt Section -->
+    <div class="container py-4 receipt-container">
+        
+        <!-- Action Buttons (Screen Only) -->
+        <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+            <div>
+                <a href="{% url 'shop' %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fa fa-arrow-left mr-1"></i> Back to Store
+                </a>
+            </div>
+            <div>
+                <button onclick="window.print()" class="btn btn-primary shadow-sm font-weight-bold">
+                    <i class="fa fa-print mr-2"></i> Print / Download Receipt
+                </button>
+            </div>
+        </div>
+
+        {% if messages %}
+            <div class="no-print">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Receipt Card Start -->
+        <div class="receipt-card p-4 p-md-5 mb-5 bg-white">
+            
+            <!-- Header -->
+            <div class="receipt-header row align-items-center">
+                <div class="col-md-7 mb-3 mb-md-0">
+                    <h2 class="font-weight-bold text-dark mb-1">
+                        <span class="text-primary border px-2 mr-1">E</span>Shopper
+                    </h2>
+                    <p class="text-muted small mb-0">Official Purchase Invoice &amp; Payment Receipt</p>
+                    <p class="text-muted small mb-0">Support: info@example.com | +012 345 67890</p>
+                </div>
+                <div class="col-md-5 text-md-right">
+                    <div class="receipt-watermark font-weight-bold mb-2">
+                        {% if order.is_paid %}
+                            <span class="badge badge-success px-3 py-2 font-weight-semi-bold">
+                                <i class="fa fa-check-circle mr-1"></i> PAYMENT COMPLETED
+                            </span>
+                        {% else %}
+                            <span class="badge badge-warning text-dark px-3 py-2 font-weight-semi-bold">
+                                <i class="fa fa-clock mr-1"></i> PAYMENT PENDING
+                            </span>
+                        {% endif %}
+                    </div>
+                    <h6 class="font-weight-bold text-dark mb-1">Receipt #: <span class="text-primary">{{ order.receipt_number|default:order.id }}</span></h6>
+                    <small class="text-muted d-block">Order ID: #{{ order.id }}</small>
+                    <small class="text-muted d-block">Date: {{ order.created_at|date:"d M Y, h:i A" }}</small>
+                </div>
+            </div>
+
+            <!-- Customer & Payment Details -->
+            <div class="row py-4">
+                <div class="col-md-6 mb-3 mb-md-0">
+                    <h6 class="text-uppercase font-weight-bold text-muted small mb-2">Billed &amp; Shipped To:</h6>
+                    <h5 class="font-weight-bold text-dark mb-1">{{ billing.first_name }} {{ billing.last_name }}</h5>
+                    <p class="mb-1 text-muted"><i class="fa fa-envelope mr-2"></i>{{ billing.email }}</p>
+                    <p class="mb-1 text-muted"><i class="fa fa-phone mr-2"></i>{{ billing.mobile_no }}</p>
+                    <p class="mb-0 text-muted">
+                        <i class="fa fa-map-marker-alt mr-2"></i>
+                        {{ billing.address_line1 }}{% if billing.address_line2 %}, {{ billing.address_line2 }}{% endif %},<br>
+                        <span class="ml-4">{{ billing.city }}, {{ billing.state }} - {{ billing.zip_code }}, {{ billing.country }}</span>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-right">
+                    <h6 class="text-uppercase font-weight-bold text-muted small mb-2">Payment Details:</h6>
+                    <p class="mb-1">
+                        <strong>Payment Method:</strong> 
+                        <span class="badge badge-secondary px-2 py-1 ml-1">{{ order.payment_method }}</span>
+                    </p>
+                    <p class="mb-1">
+                        <strong>Payment Status:</strong> 
+                        {% if order.is_paid %}
+                            <span class="text-success font-weight-bold"><i class="fa fa-check-circle mr-1"></i>Paid</span>
+                        {% else %}
+                            <span class="text-warning font-weight-bold"><i class="fa fa-clock mr-1"></i>Pending (COD)</span>
+                        {% endif %}
+                    </p>
+                    {% if order.upi_transaction_id %}
+                    <p class="mb-1 small text-muted">
+                        <strong>UPI Reference / UTR:</strong><br>
+                        <code class="text-primary font-weight-bold">{{ order.upi_transaction_id }}</code>
+                    </p>
+                    {% endif %}
+                    {% if order.razorpay_payment_id %}
+                    <p class="mb-1 small text-muted">
+                        <strong>Razorpay Payment ID:</strong><br>
+                        <code>{{ order.razorpay_payment_id }}</code>
+                    </p>
+                    {% endif %}
+                    {% if order.razorpay_order_id %}
+                    <p class="mb-1 small text-muted">
+                        <strong>Razorpay Order ID:</strong><br>
+                        <code>{{ order.razorpay_order_id }}</code>
+                    </p>
+                    {% endif %}
+                    <p class="mb-0 small text-muted">
+                        <strong>Order Status:</strong> {{ order.order_status }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="table-responsive my-3">
+                <table class="table table-bordered receipt-table mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th>Item Description</th>
+                            <th class="text-center" style="width: 140px;">Unit Price</th>
+                            <th class="text-center" style="width: 100px;">Quantity</th>
+                            <th class="text-right" style="width: 150px;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td class="text-center text-muted">{{ forloop.counter }}</td>
+                            <td>
+                                <strong class="text-dark">{{ item.product_name }}</strong>
+                            </td>
+                            <td class="text-center">₹{{ item.price|floatformat:2 }}</td>
+                            <td class="text-center">{{ item.quantity }}</td>
+                            <td class="text-right font-weight-bold">₹{{ item.total_price|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-3 text-muted">No items recorded for this order.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Summary Breakdown -->
+            <div class="row justify-content-end mt-3">
+                <div class="col-md-5">
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted">Subtotal:</span>
+                        <strong class="text-dark">₹{{ order.subtotal|floatformat:2 }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted">Shipping Charges:</span>
+                        <strong class="text-dark">₹{{ order.shipping|floatformat:2 }}</strong>
+                    </div>
+                    {% if order.discount and order.discount > 0 %}
+                    <div class="d-flex justify-content-between py-2 border-bottom text-success">
+                        <span>Coupon Discount:</span>
+                        <strong>-₹{{ order.discount|floatformat:2 }}</strong>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between py-3">
+                        <h5 class="font-weight-bold m-0 text-dark">Total Amount:</h5>
+                        <h4 class="font-weight-bold m-0 text-primary">₹{{ order.total_amount|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Receipt Footer Note -->
+            <div class="border-top pt-4 mt-4 text-center text-muted small">
+                <p class="mb-1 font-weight-medium">Thank you for shopping with EShopper!</p>
+                <p class="mb-0">This is a computer-generated receipt for your purchase. No signature is required.</p>
+            </div>
+
+        </div>
+        <!-- Receipt Card End -->
+
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

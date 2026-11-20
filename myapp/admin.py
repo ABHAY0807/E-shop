@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Categories, Colors, Coupons, Sizes, Subcategories, Product,
-    ShopCarousel, BillingAddress, Order
+    ShopCarousel, BillingAddress, Order, OrderItem, ContactMessage
 )
 
 # Register your models here.
@@ -72,17 +72,53 @@ class BillingAddressAdmin(admin.ModelAdmin):
     list_filter = ('country', 'state')
 
 
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+    readonly_fields = ('product_name', 'price', 'quantity', 'total_price')
+
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
         'id',
+        'receipt_number',
         'billing_address',
         'total_amount',
         'payment_method',
         'is_paid',
         'order_status',
+        'razorpay_payment_id',
+        'upi_transaction_id',
         'created_at',
     )
-    list_filter = ('order_status', 'is_paid', 'payment_method')
-    search_fields = ('id', 'billing_address__first_name', 'billing_address__email')
+    list_filter = ('order_status', 'is_paid', 'payment_method', 'created_at')
+    search_fields = (
+        'id',
+        'receipt_number',
+        'razorpay_payment_id',
+        'razorpay_order_id',
+        'upi_transaction_id',
+        'billing_address__first_name',
+        'billing_address__last_name',
+        'billing_address__email',
+    )
+    inlines = [OrderItemInline]
+
+
+
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display = (
+        'subject',
+        'name',
+        'email',
+        'created_at',
+        'is_read',
+    )
+    list_filter = ('is_read', 'created_at')
+    search_fields = ('name', 'email', 'subject', 'message')
+    readonly_fields = ('created_at',)
+    list_editable = ('is_read',)
+
 

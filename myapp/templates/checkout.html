@@ -33,11 +33,11 @@
         <div class="row bg-secondary py-2 px-xl-5">
             <div class="col-lg-6 d-none d-lg-block">
                 <div class="d-inline-flex align-items-center">
-                    <a class="text-dark" href="">FAQs</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">FAQs</a>
                     <span class="text-muted px-2">|</span>
-                    <a class="text-dark" href="">Help</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">Help</a>
                     <span class="text-muted px-2">|</span>
-                    <a class="text-dark" href="">Support</a>
+                    <a class="text-dark" href="{% url 'contact' %}#c">Support</a>
                 </div>
             </div>
             <div class="col-lg-6 text-center text-lg-right">
@@ -63,8 +63,7 @@
         <div class="row align-items-center py-3 px-xl-5">
             <div class="col-lg-3 d-none d-lg-block">
                 <a href="{% url 'index' %}" class="text-decoration-none">
-                    <h1 class="m-0 display-5 font-weight-semi-bold"><span
-                            class="text-primary font-weight-bold border px-3 mr-1">E</span>Shopper</h1>
+                    <h1 class="m-0 display-5 font-weight-semi-bold"><span class="text-primary font-weight-bold border px-3 mr-1">E</span>Shopper</h1>
                 </a>
             </div>
             <div class="col-lg-6 col-6 text-left">
@@ -82,11 +81,11 @@
             <div class="col-lg-3 col-6 text-right">
                 <a href="" class="btn border">
                     <i class="fas fa-heart text-primary"></i>
-                    <span class="badge">0</span>
+                    <span class="badge"></span>
                 </a>
                 <a href="{% url 'cart' %}" class="btn border">
                     <i class="fas fa-shopping-cart text-primary"></i>
-                    <span class="badge">0</span>
+                    <span class="badge"></span>
                 </a>
             </div>
         </div>
@@ -212,7 +211,7 @@
             </div>
         {% endif %}
 
-        <form method="POST" action="{% url 'checkout' %}">
+        <form method="POST" action="{% url 'checkout' %}" id="checkoutForm">
             {% csrf_token %}
             <div class="row px-xl-5">
                 <div class="col-lg-8">
@@ -228,15 +227,15 @@
                         <div class="row">
                             <div class="col-md-6 form-group">
                                 <label>First Name *</label>
-                                <input class="form-control" type="text" name="first_name" placeholder="John" value="{{ saved_billing.first_name|default:request.user.first_name }}" required>
+                                <input class="form-control" type="text" name="first_name" placeholder="John" value="{% if saved_billing %}{{ saved_billing.first_name }}{% elif request.user.is_authenticated %}{{ request.user.first_name }}{% endif %}" required>
                             </div>
                             <div class="col-md-6 form-group">
                                 <label>Last Name *</label>
-                                <input class="form-control" type="text" name="last_name" placeholder="Doe" value="{{ saved_billing.last_name|default:request.user.last_name }}" required>
+                                <input class="form-control" type="text" name="last_name" placeholder="Doe" value="{% if saved_billing %}{{ saved_billing.last_name }}{% elif request.user.is_authenticated %}{{ request.user.last_name }}{% endif %}" required>
                             </div>
                             <div class="col-md-6 form-group">
                                 <label>E-mail *</label>
-                                <input class="form-control" type="email" name="email" placeholder="example@email.com" value="{{ saved_billing.email|default:request.user.email }}" required>
+                                <input class="form-control" type="email" name="email" placeholder="example@email.com" value="{% if saved_billing %}{{ saved_billing.email }}{% elif request.user.is_authenticated %}{{ request.user.email }}{% endif %}" required>
                             </div>
                             <div class="col-md-6 form-group">
                                 <label>Mobile No *</label>
@@ -326,31 +325,64 @@
                     </div>
                     <div class="card border-secondary mb-5">
                         <div class="card-header bg-secondary border-0">
-                            <h4 class="font-weight-semi-bold m-0">Payment</h4>
+                            <h4 class="font-weight-semi-bold m-0">Payment Method</h4>
                         </div>
                         <div class="card-body">
-                            <div class="form-group">
+                            <!-- BHIM UPI / QR Code Option (PhonePe, GPay, Paytm) -->
+                            <div class="form-group border rounded p-3 mb-3 bg-light">
                                 <div class="custom-control custom-radio">
-                                    <input type="radio" class="custom-control-input" name="payment" id="paypal" value="Paypal">
-                                    <label class="custom-control-label" for="paypal">Paypal</label>
+                                    <input type="radio" class="custom-control-input" name="payment" id="bhim_upi" value="BHIM UPI" checked>
+                                    <label class="custom-control-label font-weight-bold text-dark d-flex align-items-center justify-content-between" for="bhim_upi">
+                                        <span>
+                                            <i class="fa fa-qrcode text-success mr-1"></i> BHIM UPI / QR Code
+                                        </span>
+                                        <span class="badge badge-success px-2 py-1">Scan &amp; Pay QR</span>
+                                    </label>
+                                </div>
+                                <div class="small text-muted mt-2 ml-4">
+                                    Instant QR scan with PhonePe, Google Pay, Paytm, BHIM or any UPI App.
+                                </div>
+                                <div class="d-flex align-items-center mt-2 ml-4 flex-wrap" style="gap: 6px;">
+                                    <span class="badge badge-light border text-dark py-1 px-2"><i class="fa fa-mobile-alt text-primary mr-1"></i>Google Pay</span>
+                                    <span class="badge badge-light border text-dark py-1 px-2"><i class="fa fa-bolt mr-1" style="color: #5f259f;"></i>PhonePe</span>
+                                    <span class="badge badge-light border text-dark py-1 px-2"><i class="fa fa-wallet text-info mr-1"></i>Paytm</span>
+                                    <span class="badge badge-light border text-dark py-1 px-2"><i class="fa fa-university text-success mr-1"></i>BHIM</span>
                                 </div>
                             </div>
-                            <div class="form-group">
+
+                            <!-- Razorpay Payment Option -->
+                            <div class="form-group border rounded p-3 mb-3">
                                 <div class="custom-control custom-radio">
-                                    <input type="radio" class="custom-control-input" name="payment" id="directcheck" value="Direct Check" checked>
-                                    <label class="custom-control-label" for="directcheck">Direct Check / Cash On Delivery</label>
+                                    <input type="radio" class="custom-control-input" name="payment" id="razorpay" value="Razorpay">
+                                    <label class="custom-control-label font-weight-bold text-dark d-flex align-items-center justify-content-between" for="razorpay">
+                                        <span>
+                                            <i class="fa fa-shield-alt text-primary mr-1"></i> Razorpay Payment
+                                        </span>
+                                        <span class="badge badge-secondary px-2 py-1">Cards / NetBanking</span>
+                                    </label>
+                                </div>
+                                <div class="small text-muted mt-2 ml-4">
+                                    Pay securely using Debit/Credit Cards, NetBanking, or Wallets.
                                 </div>
                             </div>
-                            <div class="form-group mb-0">
+
+                            <!-- Cash On Delivery Option -->
+                            <div class="form-group border rounded p-3 mb-0">
                                 <div class="custom-control custom-radio">
-                                    <input type="radio" class="custom-control-input" name="payment" id="banktransfer" value="Bank Transfer">
-                                    <label class="custom-control-label" for="banktransfer">Bank Transfer / UPI</label>
+                                    <input type="radio" class="custom-control-input" name="payment" id="directcheck" value="Cash on Delivery">
+                                    <label class="custom-control-label font-weight-semi-bold text-dark" for="directcheck">
+                                        <i class="fa fa-truck text-muted mr-1"></i> Cash on Delivery (COD)
+                                    </label>
+                                </div>
+                                <div class="small text-muted mt-2 ml-4">
+                                    Pay with cash upon delivery of your order.
                                 </div>
                             </div>
                         </div>
                         <div class="card-footer border-secondary bg-transparent">
-                            <button type="submit" class="btn btn-lg btn-block btn-primary font-weight-bold my-3 py-3">
-                                Place Order <i class="fa fa-arrow-right ml-1"></i>
+                            <button type="submit" id="placeOrderBtn" class="btn btn-lg btn-block btn-primary font-weight-bold my-3 py-3 shadow-sm">
+                                <span id="btnText">Place Order &amp; Pay <i class="fa fa-arrow-right ml-1"></i></span>
+                                <span id="btnSpinner" class="spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
                             </button>
                         </div>
                     </div>
@@ -449,18 +481,453 @@
     <a href="#" class="btn btn-primary back-to-top"><i class="fa fa-angle-double-up"></i></a>
 
 
+    <!-- Razorpay Test Mode Simulator Modal -->
+    <div class="modal fade" id="razorpaySimulatorModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 12px; overflow: hidden;">
+                <!-- Header -->
+                <div class="modal-header text-white px-4 py-3" style="background-color: #0c2340;">
+                    <div class="d-flex align-items-center">
+                        <span class="badge badge-warning mr-2 font-weight-bold">TEST MODE</span>
+                        <h5 class="modal-title font-weight-bold text-white mb-0">Razorpay Payment Gateway</h5>
+                    </div>
+                    <button type="button" class="close text-white" id="closeSimulatorBtn" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body p-4">
+                    <div class="text-center pb-3 border-bottom mb-3">
+                        <small class="text-muted text-uppercase font-weight-bold">Total Payable Amount</small>
+                        <h2 class="font-weight-bold text-primary mb-1" id="simAmountText">₹0.00</h2>
+                        <p class="text-muted small mb-0" id="simOrderText">Order # --</p>
+                    </div>
+
+                    <label class="font-weight-bold small text-muted text-uppercase mb-2">Select Test Payment Method:</label>
+
+                    <div class="list-group mb-3">
+                        <label class="list-group-item list-group-item-action d-flex align-items-center active" style="cursor: pointer;">
+                            <input type="radio" name="simMethod" value="card" checked class="mr-3">
+                            <div>
+                                <div class="font-weight-bold"><i class="fa fa-credit-card text-primary mr-2"></i>Test Card</div>
+                                <small class="text-muted">Card: 4111 1111 1111 1111 | CVV: 123</small>
+                            </div>
+                        </label>
+                        <label class="list-group-item list-group-item-action d-flex align-items-center" style="cursor: pointer;">
+                            <input type="radio" name="simMethod" value="upi" class="mr-3">
+                            <div>
+                                <div class="font-weight-bold"><i class="fa fa-mobile-alt text-success mr-2"></i>Test UPI (Google Pay, PhonePe, Paytm)</div>
+                                <small class="text-muted">VPA: success@razorpay</small>
+                            </div>
+                        </label>
+                        <label class="list-group-item list-group-item-action d-flex align-items-center" style="cursor: pointer;">
+                            <input type="radio" name="simMethod" value="netbanking" class="mr-3">
+                            <div>
+                                <div class="font-weight-bold"><i class="fa fa-university text-info mr-2"></i>Test NetBanking</div>
+                                <small class="text-muted">HDFC, SBI, ICICI, Axis Bank</small>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button type="button" id="confirmSimulatorPaymentBtn" class="btn btn-success btn-block py-3 font-weight-bold shadow-sm">
+                        <span id="simBtnText"><i class="fa fa-check-circle mr-2"></i>Complete Test Payment (Success)</span>
+                        <span id="simBtnSpinner" class="spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer bg-light py-2 px-4 justify-content-between">
+                    <small class="text-muted"><i class="fa fa-lock text-success mr-1"></i> Razorpay 256-bit Encrypted Simulation</small>
+                    <button type="button" id="cancelSimulatorPaymentBtn" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BHIM UPI / QR Code Modal (PhonePe, Google Pay, Paytm, BHIM) -->
+    <div class="modal fade" id="upiQrModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 480px;">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 14px; overflow: hidden;">
+                <!-- Header -->
+                <div class="modal-header text-white px-4 py-3" style="background: linear-gradient(135deg, #0b3d68 0%, #1e88e5 100%);">
+                    <div class="d-flex align-items-center">
+                        <i class="fa fa-qrcode fa-2x mr-3 text-warning"></i>
+                        <div>
+                            <h5 class="modal-title font-weight-bold text-white mb-0">BHIM UPI / QR Code Payment</h5>
+                            <small class="text-light">PhonePe &bull; Google Pay &bull; Paytm &bull; BHIM</small>
+                        </div>
+                    </div>
+                    <button type="button" class="close text-white" id="closeUpiModalBtn" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body p-4 text-center">
+                    <!-- Amount & Order Info -->
+                    <div class="mb-3">
+                        <small class="text-muted text-uppercase font-weight-bold">Total Amount to Pay</small>
+                        <h2 class="font-weight-bold text-success mb-0" id="upiAmountText">₹0.00</h2>
+                        <small class="text-muted font-weight-bold" id="upiOrderText">Order # --</small>
+                    </div>
+
+                    <!-- Dynamic QR Code Card -->
+                    <div class="p-3 bg-white border rounded mb-3 shadow-sm d-inline-block" style="border: 2px dashed #007bff !important;">
+                        <div id="upiQrContainer" class="d-flex justify-content-center align-items-center" style="min-height: 230px; min-width: 230px;">
+                            <img id="upiQrImage" src="" alt="Scan UPI QR Code" class="img-fluid rounded" style="width: 220px; height: 220px; display: none;">
+                            <div id="upiQrSpinner" class="spinner-border text-primary my-4" role="status">
+                                <span class="sr-only">Generating QR Code...</span>
+                            </div>
+                        </div>
+                        <div class="small text-dark font-weight-bold mt-2">
+                            <i class="fa fa-camera text-primary mr-1"></i> Scan with any UPI App to Pay
+                        </div>
+                    </div>
+
+                    <!-- Supported Apps Badges -->
+                    <div class="d-flex justify-content-center align-items-center mb-3 flex-wrap" style="gap: 6px;">
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-mobile-alt text-primary mr-1"></i>Google Pay</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-bolt mr-1" style="color: #5f259f;"></i>PhonePe</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-wallet text-info mr-1"></i>Paytm</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1"><i class="fa fa-university text-success mr-1"></i>BHIM</span>
+                        <span class="badge badge-pill badge-light border text-dark px-2 py-1">Cred / Any UPI</span>
+                    </div>
+
+                    <!-- UPI ID & Copy Box -->
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text bg-light small font-weight-bold text-muted">UPI ID</span>
+                        </div>
+                        <input type="text" id="upiIdDisplay" class="form-control text-center font-weight-bold bg-white" readonly value="{{ merchant_upi_id|default:'abhaysolanki5902@okhdfcbank' }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-primary font-weight-bold" type="button" id="copyUpiIdBtn" title="Copy UPI ID">
+                                <i class="fa fa-copy mr-1"></i> <span id="copyUpiBtnText">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Direct Intent Link -->
+                    <div class="mb-3 d-block d-sm-none">
+                        <a id="upiDeepLinkBtn" href="#" class="btn btn-outline-primary btn-block font-weight-bold">
+                            <i class="fa fa-external-link-alt mr-1"></i> Tap to Pay via UPI App
+                        </a>
+                    </div>
+
+                    <!-- UTR / Confirmation Section -->
+                    <div class="card bg-light border p-3 text-left mb-2">
+                        <label class="font-weight-bold small text-dark mb-1">
+                            Enter 12-Digit UPI Ref / UTR No. <span class="text-muted font-weight-normal">(Optional)</span>:
+                        </label>
+                        <div class="input-group">
+                            <input type="text" id="upiUtrInput" class="form-control font-weight-bold" placeholder="e.g. 432109876543" maxlength="22">
+                        </div>
+                        <small class="text-muted mt-1">Found in your payment receipt on Google Pay / PhonePe / Paytm / BHIM.</small>
+                    </div>
+
+                    <button type="button" id="confirmUpiPaymentBtn" class="btn btn-success btn-block py-3 font-weight-bold shadow-sm mt-3">
+                        <span id="upiBtnText"><i class="fa fa-check-circle mr-2"></i>I Have Paid &bull; Confirm &amp; Get Receipt</span>
+                        <span id="upiBtnSpinner" class="spinner-border spinner-border-sm ml-2 d-none" role="status" aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer bg-light py-2 px-4 justify-content-between">
+                    <small class="text-muted"><i class="fa fa-shield-alt text-success mr-1"></i> NPCI Certified UPI Payment</small>
+                    <button type="button" id="cancelUpiPaymentBtn" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript Libraries -->
     <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'lib/easing/easing.min.js' %}"></script>
     <script src="{% static 'lib/owlcarousel/owl.carousel.min.js' %}"></script>
 
-    <!-- Contact Javascript File -->
-    <script src="{% static 'mail/jqBootstrapValidation.min.js' %}"></script>
-    <script src="{% static 'mail/contact.js' %}"></script>
-
     <!-- Template Javascript -->
     <script src="{% static 'js/main.js' %}"></script>
+
+    <!-- Razorpay Checkout Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <script>
+    $(function () {
+        var currentOrderData = null;
+        var currentUpiOrderData = null;
+
+        // Reset simulator modal
+        function closeSimulator() {
+            $('#razorpaySimulatorModal').modal('hide');
+            var $btn = $("#placeOrderBtn");
+            $btn.prop("disabled", false);
+            $("#btnSpinner").addClass("d-none");
+            $("#btnText").html('Place Order &amp; Pay <i class="fa fa-arrow-right ml-1"></i>');
+        }
+
+        $('#closeSimulatorBtn, #cancelSimulatorPaymentBtn').on('click', closeSimulator);
+        $('#razorpaySimulatorModal').on('hidden.bs.modal', closeSimulator);
+
+        // Reset UPI QR modal
+        function closeUpiModal() {
+            $('#upiQrModal').modal('hide');
+            var $btn = $("#placeOrderBtn");
+            $btn.prop("disabled", false);
+            $("#btnSpinner").addClass("d-none");
+            $("#btnText").html('Place Order &amp; Pay <i class="fa fa-arrow-right ml-1"></i>');
+        }
+
+        $('#closeUpiModalBtn, #cancelUpiPaymentBtn').on('click', closeUpiModal);
+        $('#upiQrModal').on('hidden.bs.modal', closeUpiModal);
+
+        // Copy UPI ID button
+        $('#copyUpiIdBtn').on('click', function () {
+            var upiId = $('#upiIdDisplay').val();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(upiId).then(function () {
+                    $('#copyUpiBtnText').text('Copied!');
+                    setTimeout(function () { $('#copyUpiBtnText').text('Copy'); }, 2000);
+                });
+            } else {
+                var copyText = document.getElementById("upiIdDisplay");
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                document.execCommand("copy");
+                $('#copyUpiBtnText').text('Copied!');
+                setTimeout(function () { $('#copyUpiBtnText').text('Copy'); }, 2000);
+            }
+        });
+
+        // Confirm UPI payment button
+        $('#confirmUpiPaymentBtn').on('click', function () {
+            if (!currentUpiOrderData) return;
+
+            var $upiBtn = $(this);
+            $upiBtn.prop("disabled", true);
+            $('#upiBtnSpinner').removeClass('d-none');
+            $('#upiBtnText').text("Verifying Payment...");
+
+            var utr = $('#upiUtrInput').val().trim();
+
+            $.ajax({
+                url: "{% url 'upi_verify' %}",
+                type: "POST",
+                headers: {
+                    "X-CSRFToken": $("input[name='csrfmiddlewaretoken']").val()
+                },
+                data: {
+                    "order_id": currentUpiOrderData.order_id,
+                    "upi_transaction_id": utr,
+                    "is_ajax": "true"
+                },
+                success: function (verifyRes) {
+                    $('#upiQrModal').modal('hide');
+                    if (verifyRes.redirect_url) {
+                        window.location.href = verifyRes.redirect_url;
+                    } else {
+                        window.location.href = "/order-receipt/" + currentUpiOrderData.order_id + "/";
+                    }
+                },
+                error: function () {
+                    $('#upiQrModal').modal('hide');
+                    window.location.href = "/order-receipt/" + currentUpiOrderData.order_id + "/";
+                }
+            });
+        });
+
+        // Simulator radio selection styling
+        $('input[name="simMethod"]').on('change', function () {
+            $('.list-group-item').removeClass('active');
+            $(this).closest('.list-group-item').addClass('active');
+        });
+
+        // Confirm payment in simulator modal
+        $('#confirmSimulatorPaymentBtn').on('click', function () {
+            if (!currentOrderData) return;
+
+            var $simBtn = $(this);
+            $simBtn.prop("disabled", true);
+            $('#simBtnSpinner').removeClass('d-none');
+            $('#simBtnText').text("Processing Payment...");
+
+            var testPaymentId = "pay_test_" + Math.random().toString(36).substr(2, 9).toUpperCase();
+
+            $.ajax({
+                url: "{% url 'razorpay_verify' %}",
+                type: "POST",
+                headers: {
+                    "X-CSRFToken": $("input[name='csrfmiddlewaretoken']").val()
+                },
+                data: {
+                    "order_id": currentOrderData.order_id,
+                    "razorpay_payment_id": testPaymentId,
+                    "razorpay_order_id": currentOrderData.razorpay_order_id || "",
+                    "razorpay_signature": "simulated_test_sig",
+                    "is_ajax": "true"
+                },
+                success: function (verifyRes) {
+                    $('#razorpaySimulatorModal').modal('hide');
+                    if (verifyRes.redirect_url) {
+                        window.location.href = verifyRes.redirect_url;
+                    } else {
+                        window.location.href = "/order-receipt/" + currentOrderData.order_id + "/";
+                    }
+                },
+                error: function () {
+                    $('#razorpaySimulatorModal').modal('hide');
+                    window.location.href = "/order-receipt/" + currentOrderData.order_id + "/";
+                }
+            });
+        });
+
+        // Handle checkout submission
+        $("#checkoutForm").on("submit", function (e) {
+            var selectedPayment = $("input[name='payment']:checked").val();
+
+            if (selectedPayment === "Razorpay" || selectedPayment === "BHIM UPI") {
+                e.preventDefault();
+
+                var $form = $(this);
+                var $btn = $("#placeOrderBtn");
+                var $btnText = $("#btnText");
+                var $btnSpinner = $("#btnSpinner");
+
+                $btn.prop("disabled", true);
+                $btnSpinner.removeClass("d-none");
+                $btnText.text(selectedPayment === "BHIM UPI" ? "Generating UPI QR Code..." : "Preparing Payment...");
+
+                var formData = $form.serializeArray();
+                formData.push({ name: "is_ajax", value: "true" });
+
+                $.ajax({
+                    url: "{% url 'checkout' %}",
+                    type: "POST",
+                    data: $.param(formData),
+                    success: function (data) {
+                        if (data.status === "success") {
+                            // BHIM UPI / QR Code Flow
+                            if (data.payment_method === "BHIM UPI") {
+                                currentUpiOrderData = data;
+                                var formattedAmount = "₹" + parseFloat(data.amount).toFixed(2);
+                                $('#upiAmountText').text(formattedAmount);
+                                $('#upiOrderText').text("Order #" + data.order_id + " (" + data.receipt_number + ")");
+                                $('#upiIdDisplay').val(data.upi_id);
+                                $('#upiDeepLinkBtn').attr('href', data.upi_deep_link);
+                                
+                                // Load QR Code Image
+                                $('#upiQrSpinner').removeClass('d-none');
+                                $('#upiQrImage').hide();
+                                $('#upiQrImage').attr('src', data.qr_api_url);
+                                $('#upiQrImage').off('load').on('load', function () {
+                                    $('#upiQrSpinner').addClass('d-none');
+                                    $(this).fadeIn(200);
+                                });
+
+                                $('#confirmUpiPaymentBtn').prop("disabled", false);
+                                $('#upiBtnSpinner').addClass('d-none');
+                                $('#upiBtnText').html('<i class="fa fa-check-circle mr-2"></i>I Have Paid &bull; Confirm &amp; Get Receipt');
+
+                                $('#upiQrModal').modal('show');
+                                return;
+                            }
+
+                            // Razorpay Flow
+                            currentOrderData = data;
+
+                            // If server order creation failed due to key authentication, open Test Simulator
+                            if (data.use_simulator) {
+                                var formattedAmount = "₹" + (data.amount / 100).toFixed(2);
+                                $('#simAmountText').text(formattedAmount);
+                                $('#simOrderText').text("Order #" + data.order_id + " (" + data.receipt_number + ")");
+                                $('#confirmSimulatorPaymentBtn').prop("disabled", false);
+                                $('#simBtnSpinner').addClass('d-none');
+                                $('#simBtnText').html('<i class="fa fa-check-circle mr-2"></i>Complete Test Payment (' + formattedAmount + ')');
+                                $('#razorpaySimulatorModal').modal('show');
+                                return;
+                            }
+
+                            // Otherwise, launch official Razorpay Checkout popup
+                            var options = {
+                                "key": data.key_id,
+                                "amount": data.amount,
+                                "currency": data.currency || "INR",
+                                "name": "EShopper",
+                                "description": "Order #" + data.order_id + " (" + data.receipt_number + ")",
+                                "image": "{% static 'img/favicon.ico' %}",
+                                "order_id": data.razorpay_order_id,
+                                "handler": function (response) {
+                                    $btnText.text("Confirming Payment...");
+
+                                    $.ajax({
+                                        url: "{% url 'razorpay_verify' %}",
+                                        type: "POST",
+                                        headers: {
+                                            "X-CSRFToken": $("input[name='csrfmiddlewaretoken']").val()
+                                        },
+                                        data: {
+                                            "order_id": data.order_id,
+                                            "razorpay_payment_id": response.razorpay_payment_id,
+                                            "razorpay_order_id": response.razorpay_order_id || "",
+                                            "razorpay_signature": response.razorpay_signature || "",
+                                            "is_ajax": "true"
+                                        },
+                                        success: function (verifyRes) {
+                                            if (verifyRes.redirect_url) {
+                                                window.location.href = verifyRes.redirect_url;
+                                            } else {
+                                                window.location.href = "/order-receipt/" + data.order_id + "/";
+                                            }
+                                        },
+                                        error: function (xhr, status, error) {
+                                            window.location.href = "/order-receipt/" + data.order_id + "/";
+                                        }
+                                    });
+                                },
+                                "prefill": {
+                                    "name": data.customer_name,
+                                    "email": data.customer_email,
+                                    "contact": data.customer_phone
+                                },
+                                "theme": {
+                                    "color": "#D19C97"
+                                },
+                                "modal": {
+                                    "ondismiss": function () {
+                                        $btn.prop("disabled", false);
+                                        $btnSpinner.addClass("d-none");
+                                        $btnText.html('Place Order &amp; Pay <i class="fa fa-arrow-right ml-1"></i>');
+                                    }
+                                }
+                            };
+
+                            var rzp = new Razorpay(options);
+                            rzp.on('payment.failed', function (response) {
+                                console.warn("Razorpay payment attempt note:", response.error);
+                            });
+                            rzp.open();
+                        } else {
+                            alert(data.message || "Failed to initialize payment. Please try again.");
+                            $btn.prop("disabled", false);
+                            $btnSpinner.addClass("d-none");
+                            $btnText.html('Place Order &amp; Pay <i class="fa fa-arrow-right ml-1"></i>');
+                        }
+                    },
+                    error: function (xhr) {
+                        var errMsg = "An error occurred while placing your order. Please check the required fields.";
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errMsg = xhr.responseJSON.message;
+                        }
+                        alert(errMsg);
+                        $btn.prop("disabled", false);
+                        $btnSpinner.addClass("d-none");
+                        $btnText.html('Place Order &amp; Pay <i class="fa fa-arrow-right ml-1"></i>');
+                    }
+                });
+            }
+        });
+    });
+    </script>
 </body>
 
 </html>

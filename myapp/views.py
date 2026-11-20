@@ -4,9 +4,13 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.password_validation import validate_password
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
+from django.conf import settings
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
+import razorpay
 from django.contrib import messages
 from django.utils import timezone
 
@@ -22,7 +26,8 @@ from django.core.exceptions import ValidationError
 from django.contrib import messages
 from django.http import request
 from decimal import Decimal
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
+import razorpay
 from .models import *
 from django.core.paginator import Paginator
 import json
@@ -30,6 +35,11 @@ import json
 # Create your views here.
 
 def login(request):
+    if request.user.is_authenticated:
+        if request.user.is_staff or request.user.is_superuser or request.user.username == 'admin':
+            return redirect('/admin-dashboard/?tab=products')
+        return redirect('index')
+
     if request.method == 'POST':
         username_or_email = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
@@ -62,6 +72,11 @@ def login(request):
                     request.session.set_expiry(0)  # Until browser closes
 
                 messages.success(request, 'Login successful!')
+
+                # When logging in with admin credentials, directly open the Admin Panel for managing products
+                if authenticated_user.is_staff or authenticated_user.is_superuser or authenticated_user.username == 'admin':
+                    return redirect('/admin-dashboard/?tab=products')
+
                 return redirect('index')
 
         messages.error(
@@ -301,8 +316,73 @@ def index(request):
     }
     return render(request, 'index.html', context)
 
+@csrf_exempt
 def contact(request):
     categories = Categories.objects.all()
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        email = request.POST.get('email', '').strip()
+        subject = request.POST.get('subject', '').strip()
+        message = request.POST.get('message', '').strip()
+        is_ajax = (
+            request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+            request.POST.get('is_ajax') == 'true'
+        )
+
+        if not name or not email or not subject or not message:
+            error_msg = 'Please fill in all required fields (Name, Email, Subject, and Message).'
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return render(request, 'contact.html', {'categories': categories})
+
+        # Save to database so message is permanently stored
+        contact_record = ContactMessage.objects.create(
+            name=name,
+            email=email,
+            subject=subject,
+            message=message
+        )
+
+        # Prepare and send email to admin (abhaysolanki5902@gmail.com)
+        admin_recipient = getattr(settings, 'CONTACT_EMAIL_RECIPIENT', 'abhaysolanki5902@gmail.com')
+        email_subject = f"[EShopper Contact] {subject} - From {name}"
+        email_body = (
+            f"Hello Abhay,\n\n"
+            f"You received a new inquiry from the Contact Us form on EShopper:\n\n"
+            f"--------------------------------------------------\n"
+            f"Sender Name   : {name}\n"
+            f"Sender Email  : {email}\n"
+            f"Subject       : {subject}\n"
+            f"Date & Time   : {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+            f"--------------------------------------------------\n\n"
+            f"Message:\n"
+            f"{message}\n\n"
+            f"--------------------------------------------------\n"
+            f"Note: To reply directly to {name}, simply reply to this email."
+        )
+
+        try:
+            email_msg = EmailMessage(
+                subject=email_subject,
+                body=email_body,
+                from_email=settings.DEFAULT_FROM_EMAIL or 'abhaysolanki5902@gmail.com',
+                to=[admin_recipient],
+                reply_to=[email],
+            )
+            email_msg.send(fail_silently=False)
+        except Exception as e:
+            # Contact message is safely preserved in database, log warning
+            print(f"[Warning] Email sending failed: {e}")
+
+        success_msg = f'Thank you, {name}! Your message has been sent successfully.'
+        if is_ajax:
+            return JsonResponse({'status': 'success', 'message': success_msg})
+
+        messages.success(request, success_msg)
+        return redirect('contact')
+
     context = {
         'categories': categories
     }
@@ -473,10 +553,29 @@ def add_to_cart(request, id):
     return redirect('cart')
 
 def update_cart(request, id):
-    cart_item = CartItem.objects.get(id=id)
+    cart_item = get_object_or_404(CartItem, id=id)
 
     if request.method == "POST":
-        quantity = int(request.POST.get('quantity'))
+        action = request.POST.get('action')
+        try:
+            quantity = int(request.POST.get('quantity', cart_item.quantity))
+        except (ValueError, TypeError):
+            quantity = cart_item.quantity
+
+        if action == 'plus':
+            quantity = cart_item.quantity + 1
+        elif action == 'minus':
+            quantity = cart_item.quantity - 1
+
+        if quantity <= 0:
+            cart_item.delete()
+            messages.info(request, f"Removed '{cart_item.product.name}' from your cart.")
+            return redirect('cart')
+
+        if cart_item.product and quantity > cart_item.product.stock:
+            messages.error(request, f"Cannot update quantity. Only {cart_item.product.stock} unit(s) available for '{cart_item.product.name}'.")
+            return redirect('cart')
+
         cart_item.quantity = quantity
         cart_item.save()
 
@@ -486,6 +585,46 @@ def remove_from_cart(request, id):
     cart_item = CartItem.objects.get(id=id)
     cart_item.delete()
     return redirect('cart')
+
+
+def deduct_order_stock(order):
+    """
+    Atomically decreases product stock when an order is placed/confirmed.
+    Guarded by order.stock_deducted flag to avoid double deduction.
+    """
+    if getattr(order, 'stock_deducted', False):
+        return
+
+    from django.db import transaction
+    with transaction.atomic():
+        for item in order.items.select_related('product').all():
+            if item.product:
+                prod = Product.objects.select_for_update().get(id=item.product.id)
+                prod.stock = max(0, prod.stock - item.quantity)
+                prod.save(update_fields=['stock'])
+
+        order.stock_deducted = True
+        order.save(update_fields=['stock_deducted'])
+
+
+def restore_order_stock(order):
+    """
+    Atomically restores product stock if an order is cancelled.
+    """
+    if not getattr(order, 'stock_deducted', False):
+        return
+
+    from django.db import transaction
+    with transaction.atomic():
+        for item in order.items.select_related('product').all():
+            if item.product:
+                prod = Product.objects.select_for_update().get(id=item.product.id)
+                prod.stock += item.quantity
+                prod.save(update_fields=['stock'])
+
+        order.stock_deducted = False
+        order.save(update_fields=['stock_deducted'])
+
 
 def checkout(request):
     categories = Categories.objects.all()
@@ -506,26 +645,47 @@ def checkout(request):
     discount = Decimal('0.00')
 
     if coupon_id and cart_items.exists():
-        coupon = Coupons.objects.filter(id=coupon_id).first()
-        if coupon and coupon.is_valid():
-            discount = (subtotal * coupon.discount / Decimal('100')).quantize(Decimal('0.01'))
+        coupon = Coupons.objects.filter(
+            id=coupon_id,
+            active=True
+        ).first()
+
+        if coupon and Decimal('0') < coupon.discount <= Decimal('100'):
+            discount = (
+                subtotal * coupon.discount / Decimal('100')
+            ).quantize(Decimal('0.01'))
         else:
             request.session.pop('coupon_id', None)
             coupon = None
 
     # Prevent the discount from exceeding the subtotal.
     discount = min(discount, subtotal)
+
+    # Calculate the final amount.
     total = subtotal + shipping - discount
 
-    # Fetch latest saved billing address for authenticated user
     saved_billing = None
     if request.user.is_authenticated:
-        saved_billing = BillingAddress.objects.filter(user=request.user).first()
+        saved_billing = BillingAddress.objects.filter(user=request.user).order_by('-created_at').first()
 
     if request.method == 'POST':
         if not cart_items.exists():
-            messages.error(request, 'Your cart is empty. Please add items before checking out.')
-            return redirect('shop')
+            messages.error(request, "Your cart is empty. Please add items before checking out.")
+            return redirect('cart')
+
+        is_ajax = (
+            request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+            request.POST.get('is_ajax') == 'true'
+        )
+
+        # Real-time stock validation: check if available stock is sufficient for all cart items
+        for item in cart_items:
+            if item.product and item.product.stock < item.quantity:
+                stock_err = f"Sorry, '{item.product.name}' only has {item.product.stock} unit(s) available in stock. Please adjust your cart quantity."
+                if is_ajax:
+                    return JsonResponse({'status': 'error', 'message': stock_err}, status=400)
+                messages.error(request, stock_err)
+                return redirect('cart')
 
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
@@ -533,49 +693,149 @@ def checkout(request):
         mobile_no = request.POST.get('mobile_no', '').strip()
         address_line1 = request.POST.get('address_line1', '').strip()
         address_line2 = request.POST.get('address_line2', '').strip()
-        country = request.POST.get('country', '').strip() or 'United States'
+        country = request.POST.get('country', 'India').strip()
         city = request.POST.get('city', '').strip()
         state = request.POST.get('state', '').strip()
         zip_code = request.POST.get('zip_code', '').strip()
-        payment_method = request.POST.get('payment', 'Direct Check')
+        payment_method = request.POST.get('payment', 'Razorpay').strip()
 
-        if not all([first_name, last_name, email, mobile_no, address_line1, city, state, zip_code]):
-            messages.error(request, 'Please fill in all required billing address fields.')
+        if not first_name or not last_name or not email or not mobile_no or not address_line1 or not city or not state or not zip_code:
+            error_msg = "Please fill in all required billing address fields."
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return redirect('checkout')
+
+        # Save billing address
+        billing_address = BillingAddress.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            mobile_no=mobile_no,
+            address_line1=address_line1,
+            address_line2=address_line2,
+            country=country,
+            city=city,
+            state=state,
+            zip_code=zip_code,
+        )
+
+        # Create Order
+        order = Order.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            billing_address=billing_address,
+            subtotal=subtotal,
+            shipping=shipping,
+            discount=discount,
+            total_amount=total,
+            payment_method=payment_method,
+            is_paid=False,
+            order_status='Pending'
+        )
+
+        # Snapshot cart items into OrderItem
+        for item in cart_items:
+            OrderItem.objects.create(
+                order=order,
+                product=item.product,
+                product_name=item.product.name,
+                price=item.product.price,
+                quantity=item.quantity,
+                total_price=item.total_price()
+            )
+
+        amount_in_paise = int(total * 100)
+
+        if payment_method == 'Razorpay':
+            rzp_order_id = None
+            is_real_razorpay = False
+            try:
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                rzp_order = client.order.create({
+                    'amount': amount_in_paise,
+                    'currency': 'INR',
+                    'receipt': order.receipt_number,
+                    'payment_capture': 1
+                })
+                rzp_order_id = rzp_order.get('id')
+                order.razorpay_order_id = rzp_order_id
+                order.save(update_fields=['razorpay_order_id'])
+                is_real_razorpay = True
+            except Exception as e:
+                print(f"[Razorpay Server Order Note]: {e}")
+
+            if is_ajax:
+                return JsonResponse({
+                    'status': 'success',
+                    'payment_method': 'Razorpay',
+                    'order_id': order.id,
+                    'razorpay_order_id': rzp_order_id,
+                    'amount': amount_in_paise,
+                    'currency': 'INR',
+                    'key_id': settings.RAZORPAY_KEY_ID,
+                    'receipt_number': order.receipt_number,
+                    'customer_name': f"{first_name} {last_name}",
+                    'customer_email': email,
+                    'customer_phone': mobile_no,
+                    'use_simulator': not is_real_razorpay,
+                })
+
+            return render(request, 'razorpay_payment.html', {
+                'order': order,
+                'razorpay_key_id': settings.RAZORPAY_KEY_ID,
+                'amount_in_paise': amount_in_paise,
+                'razorpay_order_id': rzp_order_id,
+                'categories': categories,
+            })
+
+        elif payment_method == 'BHIM UPI':
+            from urllib.parse import quote_plus
+            upi_id = getattr(settings, 'MERCHANT_UPI_ID', 'abhaysolanki5902@okhdfcbank')
+            upi_name = getattr(settings, 'MERCHANT_UPI_NAME', 'EShopper Store')
+            encoded_name = quote_plus(upi_name)
+            encoded_note = quote_plus(f"Order #{order.id} {order.receipt_number}")
+            upi_deep_link = f"upi://pay?pa={upi_id}&pn={encoded_name}&am={total}&cu=INR&tn={encoded_note}"
+            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=260x260&data={quote_plus(upi_deep_link)}"
+
+            if is_ajax:
+                return JsonResponse({
+                    'status': 'success',
+                    'payment_method': 'BHIM UPI',
+                    'order_id': order.id,
+                    'receipt_number': order.receipt_number,
+                    'amount': float(total),
+                    'upi_id': upi_id,
+                    'upi_name': upi_name,
+                    'upi_deep_link': upi_deep_link,
+                    'qr_api_url': qr_api_url,
+                    'customer_name': f"{first_name} {last_name}",
+                })
+
+            return render(request, 'upi_payment.html', {
+                'order': order,
+                'upi_id': upi_id,
+                'upi_name': upi_name,
+                'upi_deep_link': upi_deep_link,
+                'qr_api_url': qr_api_url,
+                'categories': categories,
+            })
+
         else:
-            billing = BillingAddress.objects.create(
-                user=request.user if request.user.is_authenticated else None,
-                first_name=first_name,
-                last_name=last_name,
-                email=email,
-                mobile_no=mobile_no,
-                address_line1=address_line1,
-                address_line2=address_line2,
-                country=country,
-                city=city,
-                state=state,
-                zip_code=zip_code,
-            )
-
-            order = Order.objects.create(
-                user=request.user if request.user.is_authenticated else None,
-                billing_address=billing,
-                subtotal=subtotal,
-                shipping=shipping,
-                discount=discount,
-                total_amount=total,
-                payment_method=payment_method,
-                order_status='Processing',
-            )
-
-            # Clear cart items and coupon
-            cart_items.delete()
+            # Cash on delivery / Direct check
+            deduct_order_stock(order)
+            CartItem.objects.all().delete()
             request.session.pop('coupon_id', None)
 
-            messages.success(
-                request,
-                f"Thank you {first_name}! Order #{order.id} placed successfully and billing address saved."
-            )
-            return redirect('index')
+            if is_ajax:
+                return JsonResponse({
+                    'status': 'success',
+                    'payment_method': payment_method,
+                    'redirect_url': f'/order-receipt/{order.id}/'
+                })
+
+            messages.success(request, f"Order placed successfully! Receipt #{order.receipt_number}")
+            return redirect('order_receipt', order_id=order.id)
 
     context = {
         'categories': categories,
@@ -586,9 +846,138 @@ def checkout(request):
         'discount': discount,
         'total': total,
         'saved_billing': saved_billing,
+        'razorpay_key_id': getattr(settings, 'RAZORPAY_KEY_ID', 'rzp_test_U1zVcgfC6rteVZ'),
+        'amount_in_paise': int(total * 100),
+        'merchant_upi_id': getattr(settings, 'MERCHANT_UPI_ID', 'abhaysolanki5902@okhdfcbank'),
+        'merchant_upi_name': getattr(settings, 'MERCHANT_UPI_NAME', 'EShopper Store'),
     }
 
     return render(request, 'checkout.html', context)
+
+
+@csrf_exempt
+def razorpay_verify(request):
+    if request.method != 'POST':
+        return redirect('cart')
+
+    is_ajax = (
+        request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+        request.POST.get('is_ajax') == 'true'
+    )
+
+    order_id = request.POST.get('order_id')
+    razorpay_payment_id = request.POST.get('razorpay_payment_id', '').strip()
+    razorpay_order_id = request.POST.get('razorpay_order_id', '').strip()
+    razorpay_signature = request.POST.get('razorpay_signature', '').strip()
+
+    if not order_id or not razorpay_payment_id:
+        error_msg = "Invalid payment data received."
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+        messages.error(request, error_msg)
+        return redirect('checkout')
+
+    order = get_object_or_404(Order, id=order_id)
+
+    # Verify signature if signature & secret are available
+    if razorpay_signature and razorpay_order_id:
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            client.utility.verify_payment_signature({
+                'razorpay_order_id': razorpay_order_id,
+                'razorpay_payment_id': razorpay_payment_id,
+                'razorpay_signature': razorpay_signature
+            })
+        except Exception as e:
+            print(f"[Razorpay Signature Notice]: {e}")
+
+    # Mark order as paid
+    order.is_paid = True
+    order.order_status = 'Processing'
+    order.razorpay_payment_id = razorpay_payment_id
+    if razorpay_order_id:
+        order.razorpay_order_id = razorpay_order_id
+    if razorpay_signature:
+        order.razorpay_signature = razorpay_signature
+    order.save()
+
+    # Deduct product stock in real time
+    deduct_order_stock(order)
+
+    # Clear Cart & Coupon
+    CartItem.objects.all().delete()
+    request.session.pop('coupon_id', None)
+
+    messages.success(request, f"Payment successful! Order #{order.id} confirmed.")
+
+    redirect_url = f"/order-receipt/{order.id}/"
+    if is_ajax:
+        return JsonResponse({'status': 'success', 'redirect_url': redirect_url})
+
+    return redirect('order_receipt', order_id=order.id)
+
+
+@csrf_exempt
+def upi_verify(request):
+    if request.method != 'POST':
+        return redirect('cart')
+
+    is_ajax = (
+        request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+        request.POST.get('is_ajax') == 'true'
+    )
+
+    order_id = request.POST.get('order_id')
+    upi_transaction_id = request.POST.get('upi_transaction_id', '').strip()
+
+    if not order_id:
+        error_msg = "Invalid order data received."
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': error_msg}, status=400)
+        messages.error(request, error_msg)
+        return redirect('checkout')
+
+    order = get_object_or_404(Order, id=order_id)
+
+    if not upi_transaction_id:
+        date_str = timezone.now().strftime('%Y%m%d%H%M')
+        upi_transaction_id = f"UPI{date_str}{secrets.token_hex(2).upper()}"
+
+    order.is_paid = True
+    order.order_status = 'Processing'
+    order.payment_method = 'BHIM UPI'
+    order.upi_transaction_id = upi_transaction_id
+    order.save()
+
+    # Deduct product stock in real time
+    deduct_order_stock(order)
+
+    # Clear Cart & Coupon
+    CartItem.objects.all().delete()
+    request.session.pop('coupon_id', None)
+
+    messages.success(request, f"UPI payment confirmed! Order #{order.id} is now processing.")
+
+    redirect_url = f"/order-receipt/{order.id}/"
+    if is_ajax:
+        return JsonResponse({'status': 'success', 'redirect_url': redirect_url})
+
+    return redirect('order_receipt', order_id=order.id)
+
+
+def order_receipt(request, order_id):
+    categories = Categories.objects.all()
+    order = get_object_or_404(Order, id=order_id)
+    items = order.items.all()
+
+    context = {
+        'categories': categories,
+        'order': order,
+        'items': items,
+        'billing': order.billing_address,
+    }
+    return render(request, 'order_receipt.html', context)
+
 
 def detail(request, id):
     categories = Categories.objects.all()
@@ -633,18 +1022,12 @@ def shop(request):
     if subcategory_id:
         products = products.filter(subcategory_id=subcategory_id)
     if search_query:
-        name_products = products.filter(name__icontains=search_query)
-        subcategory_products = products.filter(
-            subcategory__name__icontains=search_query
-        )
-        category_products = products.filter(
-            subcategory__category__name__icontains=search_query
-        )
-
-        products = name_products.union(
-            subcategory_products,
-            category_products
-        ).order_by('-id')
+        from django.db.models import Q
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(subcategory__name__icontains=search_query) |
+            Q(subcategory__category__name__icontains=search_query)
+        ).distinct()
 
     prices = request.GET.getlist('price')
     selected_colors = request.GET.getlist('color')
@@ -747,42 +1130,12 @@ def manage_account(request):
                 messages.success(request, 'Password changed successfully!')
             return redirect('manage_account')
 
-        elif action == 'save_billing':
-            first_name = request.POST.get('first_name', '').strip()
-            last_name = request.POST.get('last_name', '').strip()
-            email = request.POST.get('email', '').strip()
-            mobile_no = request.POST.get('mobile_no', '').strip()
-            address_line1 = request.POST.get('address_line1', '').strip()
-            address_line2 = request.POST.get('address_line2', '').strip()
-            country = request.POST.get('country', '').strip() or 'United States'
-            city = request.POST.get('city', '').strip()
-            state = request.POST.get('state', '').strip()
-            zip_code = request.POST.get('zip_code', '').strip()
-
-            BillingAddress.objects.update_or_create(
-                user=user,
-                defaults={
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'email': email,
-                    'mobile_no': mobile_no,
-                    'address_line1': address_line1,
-                    'address_line2': address_line2,
-                    'country': country,
-                    'city': city,
-                    'state': state,
-                    'zip_code': zip_code,
-                }
-            )
-            messages.success(request, 'Billing address details saved in database!')
-            return redirect('manage_account')
-
-    saved_billing = BillingAddress.objects.filter(user=user).first()
+    user_orders = Order.objects.filter(user=user).order_by('-created_at')
 
     context = {
         'categories': categories,
         'user': user,
-        'saved_billing': saved_billing,
+        'user_orders': user_orders,
     }
     return render(request, 'manage_account.html', context)
 
@@ -791,3 +1144,412 @@ def user_logout(request):
     logout(request)
     messages.success(request, 'You have been logged out successfully.')
     return redirect('login')
+
+
+# ==========================================
+# CUSTOM FRONTEND ADMIN DASHBOARD & PANEL
+# ==========================================
+
+def is_admin_or_staff(user):
+    return user.is_authenticated and (
+        user.is_staff or user.is_superuser or user.username == 'admin'
+    )
+
+
+def admin_login(request):
+    """Dedicated login view for the Custom Admin Dashboard."""
+    if is_admin_or_staff(request.user):
+        return redirect('admin_dashboard')
+
+    if request.method == 'POST':
+        username_or_email = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+
+        user = User.objects.filter(email__iexact=username_or_email).first()
+        if not user:
+            user = User.objects.filter(username__iexact=username_or_email).first()
+
+        if user:
+            authenticated_user = authenticate(request, username=user.username, password=password)
+            if authenticated_user:
+                if is_admin_or_staff(authenticated_user):
+                    auth_login(request, authenticated_user)
+                    messages.success(request, f"Welcome back to Admin Dashboard, {authenticated_user.username}!")
+                    return redirect('admin_dashboard')
+                else:
+                    messages.error(request, "Access Denied: This account does not have administrator / staff privileges.")
+                    return render(request, 'admin_login.html')
+
+        messages.error(request, "Invalid administrator credentials.")
+
+    return render(request, 'admin_login.html')
+
+
+def admin_dashboard(request):
+    """Main Custom Frontend Admin Dashboard."""
+    if not is_admin_or_staff(request.user):
+        messages.warning(request, "Please log in with an administrator or staff account to access the Admin Panel.")
+        return redirect('admin_panel_login')
+
+    from django.db.models import Sum
+
+    # Inventory & Product Metrics
+    total_products = Product.objects.count()
+    total_stock = Product.objects.aggregate(total=Sum('stock'))['total'] or 0
+    low_stock_products = Product.objects.filter(stock__lte=5).select_related('subcategory', 'color', 'size').order_by('stock')
+    out_of_stock_count = Product.objects.filter(stock=0).count()
+
+    # Order & Revenue Metrics
+    total_orders = Order.objects.count()
+    total_revenue = Order.objects.filter(is_paid=True).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    orders_pending = Order.objects.filter(order_status='Pending').count()
+    orders_processing = Order.objects.filter(order_status='Processing').count()
+    orders_shipped = Order.objects.filter(order_status='Shipped').count()
+    orders_delivered = Order.objects.filter(order_status='Delivered').count()
+    orders_cancelled = Order.objects.filter(order_status='Cancelled').count()
+
+    # Data collections
+    products = Product.objects.select_related('subcategory', 'subcategory__category', 'color', 'size').order_by('-id')
+    orders = Order.objects.select_related('billing_address').prefetch_related('items').order_by('-created_at')
+    coupons = Coupons.objects.order_by('-id')
+    messages_list = ContactMessage.objects.order_by('-created_at')
+
+    # Dropdown references for modals
+    categories = Categories.objects.all()
+    subcategories = Subcategories.objects.select_related('category').all()
+    colors = Colors.objects.all()
+    sizes = Sizes.objects.all()
+
+    active_tab = request.GET.get('tab', 'overview')
+
+    context = {
+        'total_products': total_products,
+        'total_stock': total_stock,
+        'low_stock_products': low_stock_products,
+        'out_of_stock_count': out_of_stock_count,
+        'total_orders': total_orders,
+        'total_revenue': total_revenue,
+        'orders_pending': orders_pending,
+        'orders_processing': orders_processing,
+        'orders_shipped': orders_shipped,
+        'orders_delivered': orders_delivered,
+        'orders_cancelled': orders_cancelled,
+        'products': products,
+        'orders': orders,
+        'coupons': coupons,
+        'messages_list': messages_list,
+        'categories': categories,
+        'subcategories': subcategories,
+        'colors': colors,
+        'sizes': sizes,
+        'active_tab': active_tab,
+    }
+    return render(request, 'admin_dashboard.html', context)
+
+
+def admin_product_add(request):
+    """Add a new product with variant and initial stock."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        subcategory_id = request.POST.get('subcategory')
+        color_id = request.POST.get('color') or None
+        size_id = request.POST.get('size') or None
+        price = request.POST.get('price', '0').strip()
+        stock = request.POST.get('stock', '0').strip()
+        image = request.FILES.get('image')
+
+        if not name or not subcategory_id or not price:
+            messages.error(request, "Product name, subcategory, and price are required.")
+            return redirect('/admin-dashboard/?tab=products')
+
+        try:
+            subcategory = Subcategories.objects.get(id=subcategory_id)
+            color = Colors.objects.get(id=color_id) if color_id else None
+            size = Sizes.objects.get(id=size_id) if size_id else None
+            price_dec = Decimal(price)
+            stock_int = max(0, int(stock))
+
+            product = Product.objects.create(
+                name=name,
+                subcategory=subcategory,
+                color=color,
+                size=size,
+                price=price_dec,
+                stock=stock_int,
+                image=image
+            )
+            messages.success(request, f"Product '{product.name}' created successfully with {stock_int} in stock!")
+        except Exception as e:
+            messages.error(request, f"Error creating product: {e}")
+
+    return redirect('/admin-dashboard/?tab=products')
+
+
+def admin_product_edit(request, id):
+    """Update an existing product's details, pricing, and stock."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    product = get_object_or_404(Product, id=id)
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        subcategory_id = request.POST.get('subcategory')
+        color_id = request.POST.get('color') or None
+        size_id = request.POST.get('size') or None
+        price = request.POST.get('price', '').strip()
+        stock = request.POST.get('stock', '').strip()
+        image = request.FILES.get('image')
+
+        if name:
+            product.name = name
+        if subcategory_id:
+            product.subcategory_id = subcategory_id
+        product.color_id = color_id if color_id else None
+        product.size_id = size_id if size_id else None
+        if price:
+            product.price = Decimal(price)
+        if stock:
+            product.stock = max(0, int(stock))
+        if image:
+            product.image = image
+
+        product.save()
+        messages.success(request, f"Product #{product.id} ('{product.name}') updated successfully!")
+
+    return redirect('/admin-dashboard/?tab=products')
+
+
+def admin_product_delete(request, id):
+    """Delete a product."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    product = get_object_or_404(Product, id=id)
+    prod_name = product.name
+    product.delete()
+    messages.success(request, f"Product '{prod_name}' (ID #{id}) has been deleted.")
+    return redirect('/admin-dashboard/?tab=products')
+
+
+def admin_product_update_stock(request, id):
+    """Quick in-line quantity updater for instant inventory management without page reload."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    product = get_object_or_404(Product, id=id)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')  # 'increment', 'decrement', 'set'
+        amount = int(request.POST.get('amount', 1))
+
+        if action == 'increment':
+            product.stock += amount
+        elif action == 'decrement':
+            product.stock = max(0, product.stock - amount)
+        elif action == 'set':
+            product.stock = max(0, amount)
+
+        product.save(update_fields=['stock'])
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('is_ajax') == 'true':
+            return JsonResponse({
+                'status': 'success',
+                'id': product.id,
+                'stock': product.stock,
+                'is_in_stock': product.stock > 0,
+                'message': f"Stock for '{product.name}' updated to {product.stock} units."
+            })
+
+        messages.success(request, f"Stock for '{product.name}' updated to {product.stock} units.")
+
+    return redirect('/admin-dashboard/?tab=products')
+
+
+def admin_order_status_update(request, id):
+    """Update order fulfillment status and payment state."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    order = get_object_or_404(Order, id=id)
+
+    if request.method == 'POST':
+        new_status = request.POST.get('order_status')
+        new_paid = request.POST.get('is_paid')
+
+        if new_status in ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled']:
+            prev_status = order.order_status
+            order.order_status = new_status
+            if new_status == 'Cancelled' and prev_status != 'Cancelled':
+                restore_order_stock(order)
+            elif prev_status == 'Cancelled' and new_status != 'Cancelled':
+                deduct_order_stock(order)
+            elif new_status in ['Processing', 'Shipped', 'Delivered'] and not getattr(order, 'stock_deducted', False):
+                deduct_order_stock(order)
+
+        if new_paid is not None:
+            order.is_paid = (new_paid.lower() in ['true', '1', 'paid', 'yes'])
+
+        order.save()
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('is_ajax') == 'true':
+            return JsonResponse({
+                'status': 'success',
+                'order_id': order.id,
+                'order_status': order.order_status,
+                'is_paid': order.is_paid,
+                'message': f"Order #{order.id} status updated to {order.order_status}."
+            })
+
+        messages.success(request, f"Order #{order.id} updated successfully.")
+
+    return redirect('/admin-dashboard/?tab=orders')
+
+
+def admin_coupon_add(request):
+    """Create a new promotional coupon directly from the Admin Panel."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    if request.method == 'POST':
+        code = request.POST.get('code', '').strip().upper()
+        discount = request.POST.get('discount', '10').strip()
+        duration = request.POST.get('duration', 'custom')
+
+        if not code or not discount:
+            messages.error(request, "Coupon code and discount percentage are required.")
+            return redirect('/admin-dashboard/?tab=coupons')
+
+        if Coupons.objects.filter(code__iexact=code).exists():
+            messages.error(request, f"Coupon code '{code}' already exists.")
+            return redirect('/admin-dashboard/?tab=coupons')
+
+        try:
+            coupon = Coupons.objects.create(
+                code=code,
+                discount=Decimal(discount),
+                duration=duration,
+                active=True,
+                start_date=timezone.now()
+            )
+            messages.success(request, f"Coupon '{coupon.code}' with {coupon.discount}% discount created successfully!")
+        except Exception as e:
+            messages.error(request, f"Error creating coupon: {e}")
+
+    return redirect('/admin-dashboard/?tab=coupons')
+
+
+def admin_coupon_toggle(request, id):
+    """Toggle coupon active/inactive status."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    coupon = get_object_or_404(Coupons, id=id)
+    coupon.active = not coupon.active
+    coupon.save(update_fields=['active'])
+    status_str = "activated" if coupon.active else "deactivated"
+    messages.success(request, f"Coupon '{coupon.code}' has been {status_str}.")
+    return redirect('/admin-dashboard/?tab=coupons')
+
+
+def admin_coupon_delete(request, id):
+    """Delete a coupon."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    coupon = get_object_or_404(Coupons, id=id)
+    code = coupon.code
+    coupon.delete()
+    messages.success(request, f"Coupon '{code}' has been deleted.")
+    return redirect('/admin-dashboard/?tab=coupons')
+
+
+def admin_message_toggle_read(request, id):
+    """Toggle contact message read/unread status."""
+    if not is_admin_or_staff(request.user):
+        return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+    msg = get_object_or_404(ContactMessage, id=id)
+    msg.is_read = not msg.is_read
+    msg.save(update_fields=['is_read'])
+    state = "marked as read" if msg.is_read else "marked as unread"
+    messages.success(request, f"Inquiry from {msg.name} {state}.")
+    return redirect('/admin-dashboard/?tab=messages')
+
+
+@csrf_exempt
+def api_live_stock(request):
+    """
+    Real-time stock endpoint for live updates.
+    Returns product stock, price, out of stock status, and summary metrics.
+    """
+    product_id = request.GET.get('product_id')
+    if product_id:
+        prod = Product.objects.filter(id=product_id).first()
+        if not prod:
+            return JsonResponse({'status': 'error', 'message': 'Product not found'}, status=404)
+        return JsonResponse({
+            'status': 'success',
+            'product': {
+                'id': prod.id,
+                'name': prod.name,
+                'stock': prod.stock,
+                'price': float(prod.price),
+                'in_stock': prod.stock > 0,
+            }
+        })
+
+    products = list(Product.objects.all().values('id', 'name', 'stock', 'price'))
+    total_stock = sum(p['stock'] for p in products)
+    low_stock_count = sum(1 for p in products if 0 < p['stock'] <= 5)
+    out_of_stock_count = sum(1 for p in products if p['stock'] == 0)
+
+    return JsonResponse({
+        'status': 'success',
+        'total_products': len(products),
+        'total_stock': total_stock,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'products': products
+    })
+
+
+
+@csrf_exempt
+def api_live_stock(request):
+    """
+    Real-time stock endpoint for live updates.
+    Returns product stock, price, out of stock status, and summary metrics.
+    """
+    product_id = request.GET.get('product_id')
+    if product_id:
+        prod = Product.objects.filter(id=product_id).first()
+        if not prod:
+            return JsonResponse({'status': 'error', 'message': 'Product not found'}, status=404)
+        return JsonResponse({
+            'status': 'success',
+            'product': {
+                'id': prod.id,
+                'name': prod.name,
+                'stock': prod.stock,
+                'price': float(prod.price),
+                'in_stock': prod.stock > 0,
+            }
+        })
+
+    products = list(Product.objects.all().values('id', 'name', 'stock', 'price'))
+    total_stock = sum(p['stock'] for p in products)
+    low_stock_count = sum(1 for p in products if 0 < p['stock'] <= 5)
+    out_of_stock_count = sum(1 for p in products if p['stock'] == 0)
+
+    return JsonResponse({
+        'status': 'success',
+        'total_products': len(products),
+        'total_stock': total_stock,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'products': products
+    })
