@@ -1,24 +1,23 @@
 # Python
 __pycache__/
 *.py[cod]
-*.log
 
-# Virtual environment
-myenv/
+# Virtual Environment
 venv/
-.venv/
+env/
+myenv/
 
-# Django database
-db.sqlite3
-
-# Environment variables and secrets
+# Django
 .env
-
-# User-uploaded media
+db.sqlite3
 media/
 
-# Generated static files
-staticfiles/
-
-# IDE settings
+# IDE
 .vscode/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
